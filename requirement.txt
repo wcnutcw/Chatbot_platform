@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+pandas
+openpyxl
+streamlit
+requests
+langchain_experimental
+langchain_openai
+tabulate
+pymongo
+pinecone
+datetime
+uuid
+openai
+dotenv
