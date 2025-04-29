@@ -8,12 +8,13 @@ from langchain_experimental.agents import create_pandas_dataframe_agent
 from langchain_openai import ChatOpenAI
 from pymongo import MongoClient
 import uuid
-import openai
 import pinecone
 from pinecone import Pinecone
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
-import asyncio
+from embed import parallel_upsert , batch_process_embedding_async
+from cleansing import data_cleansing
+import time
 
 #ENV
 load_dotenv()
@@ -38,52 +39,8 @@ app = FastAPI()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
-# Embeding
-async def embed_batch(batch, model="text-embedding-3-small"):
-    try:
-        response = await client.embeddings.create(model=model, input=batch)
-        if hasattr(response, "data") and response.data:
-            return [item.embedding for item in response.data]
-        else:
-            raise ValueError("No 'data' found or 'data' is empty.")
-    except Exception as e:
-        logging.error(f"Error in embedding batch: {e}")
-        return []
-    
-async def upsert_batch(index, vectors_batch, namespace):
-        try:
-        # Upsert vectors to Pinecone index in parallel (no await)
-            index.upsert(vectors=vectors_batch, namespace=namespace)  # Removed await here
-            logging.debug(f"Successfully upserted {len(vectors_batch)} vectors.")
-        except Exception as e:
-            logging.error(f"Error during upsert batch: {e}")
-            raise e  # Re-raise the error to handle it in the calling function
-
-async def parallel_upsert(index, vectors, namespace, batch_size=100):
-    tasks = []
-    for i in range(0, len(vectors), batch_size):
-        batch = vectors[i:i + batch_size]
-        tasks.append(upsert_batch(index, batch, namespace))
-    await asyncio.gather(*tasks)
-
-async def batch_process_embedding_async(text_list, model="text-embedding-3-small", batch_size=100):
-    tasks = []
-    for i in range(0, len(text_list), batch_size):
-        batch = text_list[i:i + batch_size]
-        tasks.append(embed_batch(batch, model=model))
-    
-    results = await asyncio.gather(*tasks)
-    
-    embeddings = []
-    for batch_embeddings in results:
-        embeddings.extend(batch_embeddings)
-
-    return embeddings
-
-# Data Cleansing
-def data_cleansing(df: pd.DataFrame) -> pd.DataFrame:
-    return df.dropna(how="any")
-
+# Embed model
+embed = os.getenv("EMBEDDING")
 
 #Post
 agents = {}
@@ -95,12 +52,14 @@ async def upload_files(
     namespace: str = Form(...),
 ):
     try:
+        start_time = time.perf_counter()
+
         if not files:
             # logging.error("No files uploaded")
             return JSONResponse(content={"error": "No files uploaded"}, status_code=400)
 
         # logging.debug("Processing files")
-        temp_dir = TemporaryDirectory()
+        temp_dir = TemporaryDirectory()     
         dfs = []
 
         # Process each uploaded file
@@ -171,7 +130,7 @@ async def upload_files(
                 metadata = row.to_dict()
                 text = " ".join([str(value) for value in metadata.values()])
                 try:
-                    embedding = await batch_process_embedding_async([text] ,model="text-embedding-3-small")
+                    embedding = await batch_process_embedding_async([text] ,model=embed)
                 except ValueError as e:
                     logging.error(f"Error generating embedding: {e}")
                     return JSONResponse(content={"error": str(e)}, status_code=500)
@@ -187,6 +146,9 @@ async def upload_files(
             try:
                     await parallel_upsert(index, vectors, namespace, batch_size=100)
                     logging.debug(f"Successfully upserted vectors into the index {index_name}")
+                    end_time = time.perf_counter()
+                    processing_time = end_time - start_time
+                    print(f"{processing_time} second")
             except Exception as e:
                     logging.error(f"Error upserting vectors to Pinecone: {e}")
                     return JSONResponse(content={"error": "Failed to upsert vectors to Pinecone"}, status_code=500)

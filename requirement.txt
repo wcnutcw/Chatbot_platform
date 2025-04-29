@@ -13,3 +13,4 @@ datetime
 uuid
 openai
 dotenv
+nest_asyncio
