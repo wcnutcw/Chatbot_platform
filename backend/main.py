@@ -36,22 +36,9 @@ app = FastAPI()
 
 # OpenAI API key setup
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 # Embeding
-def get_embedding(text: str, model: str = "text-embedding-3-small"):
-    try:
-        response = openai.embeddings.create(model=model, input=text)
-        embedding = response.data[0].embedding
-        return embedding
-    except Exception as e:
-        logging.error(f"Error in embedding API: {e}")
-        raise ValueError("Error generating embedding")
-
-
-client = openai
-
-client = AsyncOpenAI()
-
 async def embed_batch(batch, model="text-embedding-3-small"):
     try:
         response = await client.embeddings.create(model=model, input=batch)
@@ -62,6 +49,22 @@ async def embed_batch(batch, model="text-embedding-3-small"):
     except Exception as e:
         logging.error(f"Error in embedding batch: {e}")
         return []
+    
+async def upsert_batch(index, vectors_batch, namespace):
+        try:
+        # Upsert vectors to Pinecone index in parallel (no await)
+            index.upsert(vectors=vectors_batch, namespace=namespace)  # Removed await here
+            logging.debug(f"Successfully upserted {len(vectors_batch)} vectors.")
+        except Exception as e:
+            logging.error(f"Error during upsert batch: {e}")
+            raise e  # Re-raise the error to handle it in the calling function
+
+async def parallel_upsert(index, vectors, namespace, batch_size=100):
+    tasks = []
+    for i in range(0, len(vectors), batch_size):
+        batch = vectors[i:i + batch_size]
+        tasks.append(upsert_batch(index, batch, namespace))
+    await asyncio.gather(*tasks)
 
 async def batch_process_embedding_async(text_list, model="text-embedding-3-small", batch_size=100):
     tasks = []
@@ -78,11 +81,11 @@ async def batch_process_embedding_async(text_list, model="text-embedding-3-small
     return embeddings
 
 # Data Cleansing
-def  data_cleansing(df):
-     df.dropna(how="any")
-     return df
+def data_cleansing(df: pd.DataFrame) -> pd.DataFrame:
+    return df.dropna(how="any")
 
 
+#Post
 agents = {}
 
 @app.post("/upload")
@@ -168,20 +171,21 @@ async def upload_files(
                 metadata = row.to_dict()
                 text = " ".join([str(value) for value in metadata.values()])
                 try:
-                    embedding = await batch_process_embedding_async(text, model="text-embedding-3-small")
+                    embedding = await batch_process_embedding_async([text] ,model="text-embedding-3-small")
                 except ValueError as e:
                     logging.error(f"Error generating embedding: {e}")
                     return JSONResponse(content={"error": str(e)}, status_code=500)
 
                 # Add the vector data for upsert
-                vectors = [
-                    {"id": f"vec-{i}", "values": embedding}
-                    for i, embedding in enumerate(embedding)
-                            ]
+                vectors.append({
+                    "id": f"vec-{i}",
+                    "values": embedding[0],  # เอาอันแรก เพราะ batch มีแค่ 1 ข้อความ
+                    "metadata": metadata
+                })
 
             # Perform upsert operation to insert or update data in the index
             try:
-                    index.upsert(vectors=vectors, namespace=namespace)
+                    await parallel_upsert(index, vectors, namespace, batch_size=100)
                     logging.debug(f"Successfully upserted vectors into the index {index_name}")
             except Exception as e:
                     logging.error(f"Error upserting vectors to Pinecone: {e}")
@@ -202,7 +206,7 @@ async def upload_files(
             "namespace": namespace,
             "timestamp": pd.Timestamp.now().isoformat()
         }
-        # logs_collection.insert_one(log)
+        logs_collection.insert_one(log)
 
         return {"session_id": session_id}
 
