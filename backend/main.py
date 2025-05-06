@@ -15,13 +15,19 @@ from openai import AsyncOpenAI
 from embed import parallel_upsert , batch_process_embedding_async
 from cleansing import data_cleansing
 import time
+from retrival import *
+from docx import Document
+import fitz
 
 #ENV
 load_dotenv()
 
 # กำหนดค่า logging
 # logging.basicConfig(level=logging.DEBUG)
-
+PINECONE_API_KEY :str
+PINECONE_ENV : str
+OPENAI_API_KEY : str
+EMBEDDING : str
 # MongoDB setup
 mongo_client = MongoClient("mongodb://localhost:27017/")
 db = mongo_client["file_agent_db"]
@@ -59,8 +65,19 @@ async def upload_files(
             return JSONResponse(content={"error": "No files uploaded"}, status_code=400)
 
         # logging.debug("Processing files")
-        temp_dir = TemporaryDirectory()     
+        temp_dir = TemporaryDirectory()
         dfs = []
+        
+        def read_docx(file_path):
+            doc = Document(file_path)
+            text = '\n'.join([para.text for para in doc.paragraphs])
+            return text 
+        def read_pdf(file_path):
+            text = ""
+            with fitz.open(file_path) as doc:
+                for page in doc:
+                    text += page.get_text()
+            return text
 
         # Process each uploaded file
         for uploaded_file in files:
@@ -76,6 +93,13 @@ async def upload_files(
                 xls = pd.read_excel(file_path, sheet_name=None)
                 for sheet_name, sheet_df in xls.items():
                     dfs.append(sheet_df)
+            elif uploaded_file.filename.endswith(".docx"):
+                text = read_docx(file_path)
+                df = pd.DataFrame({"text":[text]})
+            elif uploaded_file.filename.endswith(".pdf"):
+                text = read_pdf(file_path)
+                df = pd.DataFrame({"text":[text]})
+                dfs.append(df)
 
         if not dfs:
             logging.error("No valid files found")
@@ -128,9 +152,9 @@ async def upload_files(
             # Prepare vectors for upsert
             for i, row in df_combined.iterrows():
                 metadata = row.to_dict()
-                text = " ".join([str(value) for value in metadata.values()])
+                texts = [" ".join(map(str, row.to_dict().values())) for _, row in df_combined.iterrows()]
                 try:
-                    embedding = await batch_process_embedding_async([text] ,model=embed)
+                    embedding = await batch_process_embedding_async(texts ,model=embed)
                 except ValueError as e:
                     logging.error(f"Error generating embedding: {e}")
                     return JSONResponse(content={"error": str(e)}, status_code=500)
@@ -159,7 +183,11 @@ async def upload_files(
 
 
 
-
+        agents[session_id] = {
+                "agent": agent,
+                "index_name": index_name,
+                "namespace": namespace
+            }
         # Log upload details to MongoDB
         log = {
             "session_id": session_id,
@@ -178,16 +206,32 @@ async def upload_files(
 
 @app.post("/query")
 async def query(session_id: str, question: str):
-    agent = agents.get(session_id)
-    if not agent:
-        logging.error(f"Invalid session_id: {session_id}")
-        return JSONResponse(content={"error": "Invalid session_id"}, status_code=400)
-
     try:
-        logging.debug(f"Running query: {question}")
-        question = question + " กรุณาตอบเป็นภาษาไทย"
-        response = agent.run(question)
-        return {"response": response}
+        # ดึง index_name กับ namespace จาก MongoDB
+        log = logs_collection.find_one({"session_id": session_id})
+        if not log:
+            logging.error(f"No matching log found for session_id: {session_id}")
+            return JSONResponse(content={"error": "No matching log found"}, status_code=404)
+
+        index_name = log["index_name"]
+        namespace = log["namespace"]
+
+        # 1. ดึง context จาก Pinecone
+        context = await retrieve_context_from_pinecone(question, index_name, namespace)
+
+        # 2. สร้าง prompt สำหรับ GPT
+        prompt = f"""
+        บริบทต่อไปนี้คือข้อมูลจากตาราง: {context}
+        คำถามของฉันคือ: "{question}"
+
+        กรุณาตอบเป็นภาษาไทยอย่างละเอียด"""
+
+        # 3. เรียก GPT เพื่อสร้างคำตอบ
+        llm = ChatOpenAI(temperature=0, model="gpt-4")
+        response = await llm.ainvoke(prompt)
+
+        return {"response": response.content}
+
     except Exception as e:
         logging.error(f"Error processing query: {e}")
         return JSONResponse(content={"error": "Error processing query"}, status_code=500)

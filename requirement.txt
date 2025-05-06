@@ -14,3 +14,4 @@ uuid
 openai
 dotenv
 nest_asyncio
+pydantic_settings
