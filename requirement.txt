@@ -15,3 +15,7 @@ openai
 dotenv
 nest_asyncio
 pydantic_settings
+torch 
+torchvision
+sentence-transformers
+tokenizers
