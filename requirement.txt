@@ -19,3 +19,6 @@ torch
 torchvision
 sentence-transformers
 tokenizers
+transformers
+PyPDF2
+langchain
