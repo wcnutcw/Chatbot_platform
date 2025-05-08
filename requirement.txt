@@ -22,3 +22,6 @@ tokenizers
 transformers
 PyPDF2
 langchain
+pdf2image 
+Pillow
+pytesseract
