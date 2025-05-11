@@ -14,12 +14,7 @@ elif db_type == "MongoDB":
     collection_name = st.text_input("MongoDB Collection Name:", value="default-collection")
     db_name = st.text_input("MongoDB Database Name:", value="default-db")
 
-# รองรับหลายประเภทไฟล์
-uploaded_files = st.file_uploader(
-    "Upload files (CSV, Excel, PDF, Word, Images)",
-    type=["csv", "xlsx", "pdf", "doc", "png", "jpg"],
-    accept_multiple_files=True
-)
+uploaded_files = st.file_uploader("Upload CSV or Excel files", type=["csv", "xlsx"], accept_multiple_files=True)
 
 # อัปโหลดไฟล์พร้อมข้อมูล config
 if uploaded_files:
