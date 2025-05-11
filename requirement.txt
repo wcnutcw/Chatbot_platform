@@ -26,5 +26,7 @@ tokenizers
 transformers
 PyPDF2
 langchain
-pdfplumber 
-pymupdf
+pdf2image 
+Pillow
+pytesseract
+matplotlib
