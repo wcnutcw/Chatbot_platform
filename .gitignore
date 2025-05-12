@@ -1,2 +1,9 @@
 # Ignore environment files
 *.env
+.history/
+test/models/
+test/img/
+main_backend/__pycache__/
+main_backend/my_model_cache/
+test_backend/__pycache__/
+test/OCR/my_model_cache/
