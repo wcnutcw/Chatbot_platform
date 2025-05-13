@@ -29,16 +29,16 @@ client_openai = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 # --- โหลด CLIP Model ---
 cache_dir = "./my_model_cache"
-clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32", use_auth_token=HF_TOKEN, cache_dir=cache_dir)
-clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32", use_auth_token=HF_TOKEN, cache_dir=cache_dir)
+clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32", token=HF_TOKEN, cache_dir=cache_dir)
+clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32", token=HF_TOKEN, cache_dir=cache_dir)
 
 # --- โหลด BERT Tokenizer สำหรับตัด token ---
-bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased", token=HF_TOKEN, cache_dir=cache_dir, use_fast=True)
 
 # ใช้ Embedding model ตัวนี้
 EMBEDDING_MODEL = "text-embedding-3-small"
 
-MAX_TOKEN_LENGTH = 8192  # Max Token ที่ OpenAI รุ่นนี้รับได้
+MAX_TOKEN_LENGTH = 8192 # Max Token ที่ OpenAI รุ่นนี้รับได้
 
 # ======================
 # ฟังก์ชันตัดข้อความตาม Token Limit

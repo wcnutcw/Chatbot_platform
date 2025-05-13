@@ -52,7 +52,7 @@ if uploaded_files:
             st.session_state.session_id = session_id
             st.success("Files uploaded successfully! Session ready.")
         else:
-            st.error("Upload failed.")
+            st.error(f"Upload failed. Status code: {res.status_code}, Response: {res.text}")
 
 # ถ้ามี session แล้ว แสดงช่องถามคำถาม
 if "session_id" in st.session_state:
