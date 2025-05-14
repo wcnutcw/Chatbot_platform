@@ -1,51 +1,51 @@
-README
+🧠 AI Chatbot Platform
+🐍 Python Version
+Python: 3.13.x
 
-Python version : 3.13.x
+🚀 Getting Started
+📦 1. ติดตั้ง Library
+```pip install -r requirements.txt```
 
-ขั้นตอนการใช้งาน
-เริ่มต้น
-intstall Library :
-pip install -r requirements.txt
+🛠️ 2. สร้าง Environment
+```python -m venv venv```
 
-ให้มีการสร้าง environment :
-python -m venv venv
+🔐 3. ตั้งค่า Environment Variables
+สร้างไฟล์ .env ภายในโฟลเดอร์ venv/ แล้วเพิ่มค่า:
 
-ต่อมาให้สร้าง ไฟล์ .env ลงในโฟลเดอร์ venv
-แล้วใส่
-OPENAI_API_KEY= key_nameของคุณ
-MONGO_URL= localhostของคุณ
-PINECONE_API_KEY= keyของคุณ
-PINECONE_ENV= envของคุณบน pinecone
+```OPENAI_API_KEY=your_openai_api_key```
+```MONGO_URL=your_localhost_or_remote_url```
+```PINECONE_API_KEY=your_pinecone_api_key```
+```PINECONE_ENV=your_pinecone_environment```
+```EMBEDDING=embedding_model_name_from_openai```
+```HF_TOKEN=your_huggingface_token```
 
-EMBEDDING= ตามที่อยากใช้ของจาก openai
+🧪 วิธีรันโปรเจกต์
+▶️ รัน Backend (FastAPI)
+```cd main_backend```
+```uvicorn main:app --reload```
 
-HF_TOKEN= keyจาก HuggingFace
+🖼️ รัน Frontend (Streamlit)
+เปิด Terminal ใหม่:
+```cd fontend```
+```streamlit run app.py```
 
+🛠️ แก้ไขปัญหาที่พบบ่อย
+🔄 อัปเดต / ติดตั้งใหม่
+หากเกิดปัญหาเกี่ยวกับ transformers หรือ torchvision:
+```pip uninstall transformers torchvision```
+```pip install transformers torchvision```
 
-วิธี run: 
-cd main_backend
-แล้ว  ใช้คำสั่ง  uvicorn main:app --reload
+⚙️ ipywidgets / Jupyter
+ปัญหาเกี่ยวกับ IProgress:
+```pip install ipywidgets```
+```jupyter nbextension enable --py widgetsnbextension```
 
-สร้าง Terminal ใหม่ 
-cd fontend
-แล้วใช้คำสั่ง streamlit run app.py
+🔥 อัปเกรด PyTorch
+ตรวจสอบเวอร์ชันล่าสุดและแก้ไขของ torch:
+```pip install torch --upgrade```
 
-
-
-ถ้ามีปัญหาหรือ error 
-ลอง
-**อัปเดตหรือถอนการติดตั้งและติดตั้งใหม่:**
-ลองถอนการติดตั้ง transformers และ torchvision แล้วติดตั้งใหม่:
-pip uninstall transformers torchvision
-pip install transformers torchvision
-
-**ตรวจสอบการติดตั้ง ipywidgets:**
-ข้อความแจ้งเตือนเกี่ยวกับ IProgress อาจบ่งบอกว่า ipywidgets ไม่ถูกติดตั้งหรือต้องการอัปเดต ให้ติดตั้งหรืออัปเดต ipywidgets ด้วยคำสั่ง:
-pip install ipywidgets
-jupyter nbextension enable --py widgetsnbextension
-ค้นหาเวอร์ชันล่าสุดของ torch:
-pip install torch --upgrade
-
-หรือถ้าขาด Library อะไร
-ให้ install เพิ่มเติม
-
+📚 ติดตั้ง Library ที่ขาด
+หากมี error แจ้งว่าขาด library ใด ให้ติดตั้งเพิ่มด้วยคำสั่ง:
+```pip install <library_name>```
+🙋‍♂️ ติดต่อ
+หากพบปัญหาหรือข้อเสนอแนะ กรุณาเปิด Issue หรือ pull request
