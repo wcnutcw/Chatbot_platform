@@ -1,4 +1,4 @@
-# 🧠 AI Chatbot Platform (Generative AI)
+# 🧠Generative AI for RAG File
 
 ## 🐍 Python Version
 Python: 3.13.x
