@@ -1,9 +1,9 @@
-###🧠 AI Chatbot Platform (Generative AI)###
+# 🧠 AI Chatbot Platform (Generative AI)
 
-🐍 Python Version
+## 🐍 Python Version
 Python: 3.13.x
 
-🚀 Getting Started
+## 🚀 Getting Started
 📦 1. ติดตั้ง Library
 ```pip install -r requirements.txt```
 
@@ -20,33 +20,34 @@ Python: 3.13.x
 ```EMBEDDING=embedding_model_name_from_openai```
 ```HF_TOKEN=your_huggingface_token```
 
-🧪 วิธีรันโปรเจกต์
+## 🧪 วิธีรันโปรเจกต์
 ▶️ รัน Backend (FastAPI)
 ```cd main_backend```
 ```uvicorn main:app --reload```
 
-🖼️ รัน Frontend (Streamlit)
+## 🖼️ รัน Frontend (Streamlit)
 เปิด Terminal ใหม่:
 ```cd fontend```
 ```streamlit run app.py```
 
-🛠️ แก้ไขปัญหาที่พบบ่อย
+## 🛠️ แก้ไขปัญหาที่พบบ่อย
 🔄 อัปเดต / ติดตั้งใหม่
 หากเกิดปัญหาเกี่ยวกับ transformers หรือ torchvision:
 ```pip uninstall transformers torchvision```
 ```pip install transformers torchvision```
 
-⚙️ ipywidgets / Jupyter
+## ⚙️ ipywidgets / Jupyter
 ปัญหาเกี่ยวกับ IProgress:
 ```pip install ipywidgets```
 ```jupyter nbextension enable --py widgetsnbextension```
 
-🔥 อัปเกรด PyTorch
+## 🔥 อัปเกรด PyTorch
 ตรวจสอบเวอร์ชันล่าสุดและแก้ไขของ torch:
 ```pip install torch --upgrade```
 
-📚 ติดตั้ง Library ที่ขาด
+## 📚 ติดตั้ง Library ที่ขาด
 หากมี error แจ้งว่าขาด library ใด ให้ติดตั้งเพิ่มด้วยคำสั่ง:
 ```pip install <library_name>```
-🙋‍♂️ ติดต่อ
+
+## 🙋‍♂️ ติดต่อ
 หากพบปัญหาหรือข้อเสนอแนะ กรุณาเปิด Issue หรือ pull request
