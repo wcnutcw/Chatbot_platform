@@ -231,7 +231,7 @@ async def query(session_id: str, question: str):
 
         llm = ChatOpenAI(
             temperature=0,
-            model="gpt-4",
+            model="gpt-4o-mini",
             api_key=OPENAI_API_KEY,
             streaming=True,
             callbacks=[StreamingStdOutCallbackHandler()]
