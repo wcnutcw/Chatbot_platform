@@ -13,32 +13,36 @@ Python: 3.13.x
 🔐 3. ตั้งค่า Environment Variables
 สร้างไฟล์ .env ภายในโฟลเดอร์ venv/ แล้วเพิ่มค่า:
 
-```OPENAI_API_KEY=your_openai_api_key```
-```MONGO_URL=your_localhost_or_remote_url```
-```PINECONE_API_KEY=your_pinecone_api_key```
-```PINECONE_ENV=your_pinecone_environment```
-```EMBEDDING=embedding_model_name_from_openai```
-```HF_TOKEN=your_huggingface_token```
+<pre>OPENAI_API_KEY=your_openai_api_key
+MONGO_URL=your_localhost_or_remote_url
+PINECONE_API_KEY=your_pinecone_api_key
+PINECONE_ENV=your_pinecone_environment
+EMBEDDING=embedding_model_name_from_openai
+HF_TOKEN=your_huggingface_token```</pre>
 
 ## 🧪 วิธีรันโปรเจกต์
 ▶️ รัน Backend (FastAPI)
 ```cd main_backend```
+
 ```uvicorn main:app --reload```
 
 ## 🖼️ รัน Frontend (Streamlit)
 เปิด Terminal ใหม่:
 ```cd fontend```
+
 ```streamlit run app.py```
 
 ## 🛠️ แก้ไขปัญหาที่พบบ่อย
 🔄 อัปเดต / ติดตั้งใหม่
 หากเกิดปัญหาเกี่ยวกับ transformers หรือ torchvision:
 ```pip uninstall transformers torchvision```
+
 ```pip install transformers torchvision```
 
 ## ⚙️ ipywidgets / Jupyter
 ปัญหาเกี่ยวกับ IProgress:
 ```pip install ipywidgets```
+
 ```jupyter nbextension enable --py widgetsnbextension```
 
 ## 🔥 อัปเกรด PyTorch
