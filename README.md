@@ -1,4 +1,5 @@
-🧠 AI Chatbot Platform
+###🧠 AI Chatbot Platform (Generative AI)###
+
 🐍 Python Version
 Python: 3.13.x
 
