@@ -36,7 +36,7 @@ clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32", t
 bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased", token=HF_TOKEN, cache_dir=cache_dir, use_fast=True)
 
 # ใช้ Embedding model ตัวนี้
-EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_MODEL = os.getenv("EMBEDDING")
 MAX_TOKEN_LENGTH = 512 # Max Token ที่ OpenAI รุ่นนี้รับได้
 
 # ======================
