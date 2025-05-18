@@ -37,55 +37,60 @@ bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased", token=HF_TOK
 
 # ใช้ Embedding model ตัวนี้
 EMBEDDING_MODEL = "text-embedding-3-small"
-
-MAX_TOKEN_LENGTH = 8192 # Max Token ที่ OpenAI รุ่นนี้รับได้
+MAX_TOKEN_LENGTH = 512 # Max Token ที่ OpenAI รุ่นนี้รับได้
 
 # ======================
 # ฟังก์ชันตัดข้อความตาม Token Limit
 # ======================
-def safe_cut_text(text, tokenizer, max_token_len=MAX_TOKEN_LENGTH):
-    tokens = tokenizer.encode(text, add_special_tokens=False)
+def safe_cut_text(text, tokenizer, max_token_len=512):
+    tokens = tokenizer.encode(text, add_special_tokens=True)  # เพิ่ม special tokens
     if len(tokens) <= max_token_len:
         return text
     else:
-        # ตัด tokens ให้เหลือพอดี
         cut_tokens = tokens[:max_token_len]
-        decoded_text = tokenizer.decode(cut_tokens)
+        decoded_text = tokenizer.decode(cut_tokens, clean_up_tokenization_spaces=True)
         print(f"⚠️ ตัดข้อความจาก {len(tokens)} token → {max_token_len} token")
         return decoded_text
-
 # ======================
 # ฟังก์ชันประมวลผลข้อความ batch
 # ======================
 async def embed_batch(batch, embed_model):
-    # ตัดข้อความให้ไม่เกิน max_token_len
     batch = [safe_cut_text(text, bert_tokenizer) for text in batch]
-
-    # ส่งข้อมูลไปยัง API
     response = await client_openai.embeddings.create(model=embed_model, input=batch)
-    
-    # ตรวจสอบผลลัพธ์
     embeddings = [item.embedding for item in response.data]
     print(f"⚠️ จำนวน embeddings ที่ได้รับ: {len(embeddings)}")
-    
-    if len(embeddings) != len(batch):
-        print(f"⚠️ จำนวน embeddings ที่ได้ ({len(embeddings)}) ไม่เท่ากับจำนวนข้อความใน batch ({len(batch)})")
-    
     return embeddings
 
+# ======================
+# ฟังก์ชันรันหลาย batch พร้อมกัน
+# ======================
 async def batch_process_embedding_async(text_list, embed_model, batch_size=100):
-    assert isinstance(text_list, list), "❌ text_list ต้องเป็น list ของข้อความ"
     tasks = []
     for i in range(0, len(text_list), batch_size):
         batch = text_list[i:i + batch_size]
         tasks.append(embed_batch(batch, embed_model))
-    
     results = await asyncio.gather(*tasks)
-    
-    # ตรวจสอบจำนวน embeddings ที่ได้รับ
     embeddings = [embedding for batch in results for embedding in batch]
     print(f"✅ สร้าง embeddings ทั้งหมด {len(embeddings)} vectors")
-    
+    return embeddings
+
+# ======================
+# ฟังก์ชันประมวลผลภาพ base64 → CLIP embedding
+# ======================
+def embed_clip_images(images_b64):
+    embeddings = []
+    for idx, img_b64 in enumerate(images_b64):
+        try:
+            image_data = base64.b64decode(img_b64)
+            image = Image.open(BytesIO(image_data)).convert("RGB")
+            inputs = clip_processor(images=image, return_tensors="pt", padding=True)
+            with torch.no_grad():
+                outputs = clip_model.get_image_features(**inputs)
+            img_embedding = outputs.squeeze().cpu().tolist()
+            embeddings.append(img_embedding)
+            print(f"✅ สร้าง CLIP embedding สำหรับรูปภาพ {idx+1}/{len(images_b64)}")
+        except Exception as e:
+            print(f"❌ ไม่สามารถประมวลผลรูปภาพ {idx+1}: {e}")
     return embeddings
 
 # ======================
@@ -93,15 +98,15 @@ async def batch_process_embedding_async(text_list, embed_model, batch_size=100):
 # ======================
 async def embed_result_all(result, embed_model):
     combined_text_list = []
+    image_embeddings = []
 
     if isinstance(result, pd.DataFrame):
-        # กรณี result เป็น DataFrame
         for _, row in result.iterrows():
             row_text = "\n".join(f"{k}: {v}" for k, v in row.items())
             safe_text = safe_cut_text(row_text, bert_tokenizer)
             combined_text_list.append(safe_text)
+
     elif isinstance(result, dict):
-        # กรณี result เป็น dict แบบเดิม
         text_data = result.get("text", "")
         if text_data:
             split_text = textwrap.wrap(text_data, width=800)
@@ -118,15 +123,14 @@ async def embed_result_all(result, embed_model):
                 combined_text_list.append(safe_text)
 
         images_b64 = result.get("images_b64", [])
-        for idx, img_b64 in enumerate(images_b64):
-            img_text = f"[Image {idx+1}]"
-            combined_text_list.append(img_text)
-    else:
-        raise ValueError("Unsupported input type for embed_result_all")
+        if images_b64:
+            image_embeddings = embed_clip_images(images_b64)
 
-    if combined_text_list:
-        embeddings = await batch_process_embedding_async(combined_text_list, embed_model)
-        return embeddings
-    else:
-        print("❌ ไม่มีข้อมูลให้สร้าง embeddings")
-        return []
+    # สร้าง text embeddings แบบ async
+    text_embeddings = await batch_process_embedding_async(combined_text_list, embed_model)
+
+    # รวมผลลัพธ์ embeddings ทั้งข้อความและภาพ
+    all_embeddings = text_embeddings + image_embeddings
+    print(f"📦 รวมทั้งหมด: {len(text_embeddings)} (text) + {len(image_embeddings)} (images) = {len(all_embeddings)} embeddings")
+
+    return all_embeddings
