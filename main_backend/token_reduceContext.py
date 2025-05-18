@@ -8,7 +8,7 @@ def count_tokens(text, model):
     encoded = tokenizer.encode(text, truncation=True, padding=False)
     return len(encoded)
 
-encoding = tiktoken.encoding_for_model("gpt-4")
+encoding = tiktoken.encoding_for_model("gpt-4o-mini")
 
 def reduce_context(text, num_tokens_context):
     tokens = encoding.encode(text)

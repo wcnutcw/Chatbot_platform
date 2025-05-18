@@ -4,11 +4,12 @@
 Python: 3.13.x
 
 ## 🚀 Getting Started
-📦 1. ติดตั้ง Library
+🛠️ 1. สร้าง Environment
+```python -m venv venv```
+
+📦 2. ติดตั้ง Library ผ่านลงใน environment
 ```pip install -r requirements.txt```
 
-🛠️ 2. สร้าง Environment
-```python -m venv venv```
 
 🔐 3. ตั้งค่า Environment Variables
 สร้างไฟล์ .env ภายในโฟลเดอร์ venv/ แล้วเพิ่มค่า:
