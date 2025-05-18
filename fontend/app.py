@@ -17,7 +17,7 @@ elif db_type == "MongoDB":
 # รองรับหลายประเภทไฟล์
 uploaded_files = st.file_uploader(
     "Upload files (CSV, Excel, PDF, Word, Images)",
-    type=["csv", "xlsx", "pdf", "doc", "png", "jpg"],
+    type=["csv", "xlsx", "pdf", "docx", "png", "jpg"],
     accept_multiple_files=True
 )
 

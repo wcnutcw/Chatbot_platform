@@ -25,7 +25,7 @@ HF_TOKEN=your_huggingface_token</pre>
 ▶️ รัน Backend (FastAPI)
 ```cd main_backend```
 
-```uvicorn main:app --reload```
+```uvicorn main:app --reload --port 8000```
 
 ## 🖼️ รัน Frontend (Streamlit)
 เปิด Terminal ใหม่:
