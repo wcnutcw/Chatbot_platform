@@ -236,7 +236,7 @@ async def query(session_id: str, question: str):
 
         llm = ChatOpenAI(
             temperature=0,
-            model="gpt-4o-mini",
+            model="gpt-4.1-mini",
             api_key=OPENAI_API_KEY,
             streaming=True,
             callbacks=[StreamingStdOutCallbackHandler()]
@@ -381,15 +381,20 @@ async def process_chatbot_query(sender_id: str, user_message: str):
         return "ขออภัย เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง"
     
  # Wait for future updates to enter the database
-def is_message_processed(message_id: str) -> bool:
-    # ตรวจสอบว่ามี message_id นี้อยู่ใน collection หรือไม่
-    result = logs_collection.find_one({"message_id": message_id})
-    return result is not None
+def is_message_processed(message_id):
+    try:
+        with open('processed_messages.txt', 'r') as file:
+            processed_messages = file.readlines()
+            if message_id + '\n' in processed_messages:
+                return True
+    except FileNotFoundError:
+        pass
+    return False
 
-def mark_message_as_processed(message_id: str):
-    # บันทึก message_id ลง collection โดยไม่ซ้ำ
-    if not is_message_processed(message_id):
-        logs_collection.insert_one({"message_id": message_id})
+# Wait for editing to enter the database to store the conversation between the user.
+def mark_message_as_processed(message_id):
+    with open('processed_messages.txt', 'a') as file:
+        file.write(message_id + '\n')
     
 # Webhook สำหรับรับข้อความจาก Facebook
 @app.post('/webhook')
