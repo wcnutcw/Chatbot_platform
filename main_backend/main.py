@@ -199,6 +199,60 @@ async def upload_files(
         return JSONResponse(content={"error": f"Internal server error: {str(e)}"}, status_code=500)
 
 
+@app.post("/start_session")
+async def start_session(
+    db_type: str = Form(...),
+    index_name: str = Form(None),
+    namespace: str = Form(None),
+    db_name: str = Form(None),
+    collection_name: str = Form(None)
+):
+    try:
+        # สร้าง session_id ใหม่
+        session_id = str(uuid.uuid4())
+
+        # ตรวจสอบชนิดฐานข้อมูลและตั้งค่า agent หรือ log ให้เหมาะสม
+        if db_type == "Pinecone":
+            if not index_name or not namespace:
+                return JSONResponse(content={"error": "Missing index_name or namespace for Pinecone"}, status_code=400)
+
+            # ตรวจสอบว่ามี log session เก่า หรือสร้าง agent ใหม่ที่นี่ได้เลย
+            # ตัวอย่าง: สร้าง agent สำหรับ Pinecone (ถ้ามีฟังก์ชันสร้าง agent)
+            # agents[session_id] = create_pinecone_agent(index_name, namespace)
+
+            # บันทึก log ลง MongoDB (ถ้าต้องการ)
+            logs_collection.insert_one({
+                "session_id": session_id,
+                "db_type": "Pinecone",
+                "index_name": index_name,
+                "namespace": namespace,
+                "timestamp": pd.Timestamp.now().isoformat()
+            })
+
+        elif db_type == "MongoDB":
+            if not db_name or not collection_name:
+                return JSONResponse(content={"error": "Missing db_name or collection_name for MongoDB"}, status_code=400)
+
+            # สร้าง agent สำหรับ MongoDB หรือเตรียม retrieval
+            # agents[session_id] = create_mongodb_agent(db_name, collection_name)
+
+            logs_collection.insert_one({
+                "session_id": session_id,
+                "db_type": "MongoDB",
+                "db_name": db_name,
+                "collection_name": collection_name,
+                "timestamp": pd.Timestamp.now().isoformat()
+            })
+
+        else:
+            return JSONResponse(content={"error": f"Unsupported db_type: {db_type}"}, status_code=400)
+
+        return {"session_id": session_id}
+
+    except Exception as e:
+        logging.error(f"Error in /start_session: {e}")
+        return JSONResponse(content={"error": f"Internal server error: {str(e)}"}, status_code=500)
+
 @app.post("/query")
 async def query(session_id: str, question: str):
     try:
