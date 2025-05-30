@@ -32,11 +32,10 @@ from fastapi.responses import JSONResponse
 import datetime
 
 current_directory = os.getcwd()
-print("Current Directory:", current_directory)  # พิมพ์ที่อยู่ปัจจุบัน
+print("Current Directory:", current_directory) 
 
-# ปรับเส้นทางไปยังไฟล์ .env ในโฟลเดอร์ venv
 env_path = Path(current_directory).parent / 'venv' / '.env'
-print("Env Path:", env_path)  # พิมพ์เส้นทางที่ไปยัง .env
+print("Env Path:", env_path)  
 
 load_dotenv(dotenv_path=env_path,override=True)
 
@@ -278,7 +277,6 @@ async def send_facebook_message(sender_id: str, message: str):
 async def process_chatbot_query(sender_id: str, user_message: str):
     """Process user message through chatbot and return response"""
     try:
-        # ใช้ sender_id เป็น session_id หรือสร้าง session_id ตามระบบของคุณ
         session_id = f"fb_{sender_id}"
         
         # เรียกใช้ฟังก์ชัน query
@@ -287,7 +285,7 @@ async def process_chatbot_query(sender_id: str, user_message: str):
             # ใช้ session ที่มีอยู่แล้วในระบบ (session ล่าสุด)
             log = logs_collection.find_one({}, sort=[("_id", -1)])
             if not log:
-                return "ขออภัย ยังไม่มีการตั้งค่าระบบ กรุณาติดต่อผู้ดูแลระบบเพื่อสร้างฐานข้อมูล"
+                return "ขออภัยค่ะ/ครับ ขณะนี้ไม่สามารถให้คำตอบได้"
             
             print(f"Using existing session for Facebook user {sender_id}: {log.get('session_id', 'unknown')}")
 
@@ -308,7 +306,7 @@ async def process_chatbot_query(sender_id: str, user_message: str):
             num_tokens_context = count_tokens(context_bf, model="sentence-transformers/LaBSE")
             context = reduce_context(context_bf, num_tokens_context)
         else:
-            return "เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง"
+            return "ขออภัย เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง"
 
         prompt = Prompt_Template(context, user_message)
 
@@ -404,7 +402,7 @@ async def receive_message(request: Request):
                     except Exception as e:
                         logging.error(f"Error processing message from {sender_id}: {e}")
                         # ส่งข้อความแสดงข้อผิดพลาด
-                        await send_facebook_message(sender_id, "ขออภัย เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง")
+                        await send_facebook_message(sender_id, "ขออภัยค่ะ/ครับ ขณะนี้ไม่สามารถให้คำตอบได้")
 
         return Response(content="ok", status_code=200)
         
@@ -418,7 +416,7 @@ async def verify_webhook(request: Request):
     verify_token = request.query_params.get('hub.verify_token')
     challenge = request.query_params.get('hub.challenge')
     
-    if verify_token == FACEBOOK_ACCESS_TOKEN:  # ตั้งค่า FACEBOOK_VERIFY_TOKEN ในไฟล์ config
+    if verify_token == FACEBOOK_ACCESS_TOKEN:  
         return Response(content=challenge, status_code=200)
     else:
         return Response(content="Invalid verification token", status_code=403)
