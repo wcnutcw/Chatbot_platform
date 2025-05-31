@@ -56,6 +56,7 @@ pc = Pinecone(api_key=PINECONE_API_KEY, environment=PINECONE_ENV)
 EMBEDDING_MODEL = os.getenv("EMBEDDING")
 client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
+#TOKEN_FACEBOOK
 FACEBOOK_ACCESS_TOKEN = os.getenv("FACEBOOK_ACCESS_TOKEN")
 
 # FastAPI
