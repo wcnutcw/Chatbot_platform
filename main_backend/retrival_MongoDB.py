@@ -57,7 +57,7 @@ def reduce_token_with_bert(text, max_tokens=512):
     truncated_text = bert_tokenizer.decode(encoded["input_ids"][0], skip_special_tokens=True)
     return truncated_text
 
-async def retrieve_context_from_mongodb(collection,question: str, top_k: int = 50):
+async def retrieve_context_from_mongodb(collection,question: str, top_k: int = 3):
     # สร้าง embedding สำหรับคำถามด้วย LaBSE
     question_vector = labse_model.encode([question], convert_to_numpy=True)
 

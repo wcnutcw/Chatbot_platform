@@ -19,7 +19,7 @@ from pinecone import Pinecone, ServerlessSpec
 # import json
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from fastapi.middleware.cors import CORSMiddleware
-from uploadfile import *
+from uploadfile import * 
 from embed_pinecone import *
 from retrival_Pinecone import *
 from embed_MongoDB import *
@@ -329,6 +329,7 @@ async def send_facebook_message(sender_id: str, message: str):
         logging.error(f"Error sending Facebook message: {e}")
         return False
 
+from memory import *
 # ฟังก์ชันสำหรับประมวลผลข้อความจาก chatbot
 async def process_chatbot_query(sender_id: str, user_message: str):
     """Process user message through chatbot and return response"""
@@ -364,7 +365,7 @@ async def process_chatbot_query(sender_id: str, user_message: str):
         else:
             return "ขออภัย เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง"
 
-        prompt = Prompt_Template(context, user_message)
+        # prompt = Prompt_Template(context, user_message)
 
         llm = ChatOpenAI(
             temperature=0,
@@ -374,8 +375,11 @@ async def process_chatbot_query(sender_id: str, user_message: str):
             callbacks=[StreamingStdOutCallbackHandler()]
         )
 
-        response = await llm.ainvoke(prompt)
-        return response.content
+
+        """  UPDATE MEMORY"""
+        response = chat_interactive(user_message,context)
+        # response = await llm.ainvoke(prompt)
+        return response
 
     except Exception as e:
         logging.error(f"Error in chatbot processing: {e}")
