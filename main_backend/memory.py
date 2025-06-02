@@ -142,7 +142,7 @@ def ChatNode(state: dict, context, is_first_greeting: bool = False) -> dict:
         )
     from Prompt import base_system
     base_system = base_system()
-    system_message = base_system + "\n\n" + profile_str + "PDF Context (relevant chunks):\n" + pdf_context
+    system_message = base_system + "\n\n" + profile_str + "File Context (relevant chunks):\n" + pdf_context
 
     # เรียกใช้ llm_model เพื่อให้ได้ผลลัพธ์ตอบกลับ
     result = llm_model.invoke({
