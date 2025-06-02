@@ -111,7 +111,7 @@ def GetProfileNode(state: dict) -> dict:
     return state
 
 # -------------------------------------------------------
-# ฟังก์ชัน ChatNode (ใช้ Pinecone similarity_search ภายใน namespace "test-buu")
+# ฟังก์ชัน ChatNode 
 # -------------------------------------------------------
 
 def ChatNode(state: dict, context, is_first_greeting: bool = False) -> dict:
