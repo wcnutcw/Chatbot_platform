@@ -216,6 +216,6 @@ def chat_interactive(user_message, context):
         print("(ไม่มีข้อความตอบกลับ)")
 
 
-
+# เผื่อทดสอบระบบ
 # if __name__ == "__main__":
 #     chat_interactive()
