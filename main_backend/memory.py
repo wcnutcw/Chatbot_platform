@@ -1,5 +1,3 @@
-# chat_pdf.py
-
 import os
 from dotenv import load_dotenv
 from pathlib import Path
@@ -46,14 +44,14 @@ prompt_template = ChatPromptTemplate.from_messages([
 llm_model = prompt_template | llm
 
 # -------------------------------------------------------
-# 4) เตรียม InMemoryStore สำหรับเก็บ Profile memory (global)
+# เตรียม InMemoryStore สำหรับเก็บ Profile memory (global)
 # -------------------------------------------------------
 store = InMemoryStore()
 user_id = "1"
 namespace_for_memory = (user_id, "memories")
 
 # -------------------------------------------------------
-# 5) สร้าง Profile model และ structured_llm สำหรับดึงข้อมูลโปรไฟล์ (global)
+# สร้าง Profile model และ structured_llm สำหรับดึงข้อมูลโปรไฟล์ (global)
 # -------------------------------------------------------
 class Profile(BaseModel):
     name: Optional[str]
@@ -74,19 +72,13 @@ def log_user_message(message: str):
 # Connect to MongoDB   ( in the furthur set timing  1 day )
 
 # -------------------------------------------------------
-# 7) ฟังก์ชัน GetProfileNode (รับแค่ state) ใช้ global store
+#  ฟังก์ชัน GetProfileNode (รับแค่ state) ใช้ global store
 # -------------------------------------------------------
 def GetProfileNode(state: dict) -> dict:
     global store, namespace_for_memory, structured_llm
-
-    system_message = """
-    คุณคือเจ้าหน้าที่ฝ่ายตอบคำถามนักศึกษาจากสำนักคอมพิวเตอร์ มหาวิทยาลัยบูรพา
-    โปรดวิเคราะห์ข้อมูลและสรุปโปรไฟล์ของผู้สนทนาเท่าที่มีอยู่ในข้อความอย่างสุภาพและรอบคอบ
-    หากไม่มีข้อมูลในบางส่วน กรุณาระบุว่า None โดยไม่สมมุติหรือเติมข้อมูลเอง
-    Context: {context}
-    """
+    from Prompt import system_message
     result = structured_llm.invoke({
-        "system_message": system_message.format(context=state["messages"]),
+        "system_message": system_message(state["messages"]),
         "messages": [{"role": "user", "content": "get my profile info"}]
     })
 
@@ -119,7 +111,7 @@ def GetProfileNode(state: dict) -> dict:
     return state
 
 # -------------------------------------------------------
-# 8) ฟังก์ชัน ChatNode (ใช้ Pinecone similarity_search ภายใน namespace "test-buu")
+# ฟังก์ชัน ChatNode (ใช้ Pinecone similarity_search ภายใน namespace "test-buu")
 # -------------------------------------------------------
 
 def ChatNode(state: dict, context, is_first_greeting: bool = False) -> dict:
@@ -148,12 +140,8 @@ def ChatNode(state: dict, context, is_first_greeting: bool = False) -> dict:
             f"Hobby: {pdata.get('hobby')}\n\n"
         )
 
-    base_system = """
-คุณเป็นเจ้าหน้าที่ฝ่ายตอบคำถามนักศึกษาของสำนักคอมพิวเตอร์ มหาวิทยาลัยบูรพา 
-ให้ตอบแบบสุภาพ เป็นทางการ ใช้ถ้อยคำไพเราะ อบอุ่น ให้ความรู้สึกเป็นผู้ชายใจดีและช่วยเหลือ
-หลังจากกล่าวทักทาย "สวัสดีครับ" ในครั้งแรกแล้ว ให้ตอบโดยไม่ต้องมีสวัสดีในข้อความอีก
-ใช้ context จาก memory, prompt, และ history ของการสนทนา
-"""
+    from Prompt import base_system
+    base_system = base_system()
     system_message = base_system + "\n\n" + profile_str + "PDF Context (relevant chunks):\n" + pdf_context
 
     # เรียกใช้ llm_model เพื่อให้ได้ผลลัพธ์ตอบกลับ
@@ -182,7 +170,7 @@ def ChatNode(state: dict, context, is_first_greeting: bool = False) -> dict:
 
 
 # -------------------------------------------------------
-# 9) สร้าง Graph Workflow และ Compile (ไม่ต้องส่ง store พารามิเตอร์)
+#  สร้าง Graph Workflow และ Compile (ไม่ต้องส่ง store พารามิเตอร์)
 # -------------------------------------------------------
 State = TypedDict("State", {"messages": List[dict]})
 graph_builder = StateGraph(State)
@@ -201,7 +189,7 @@ def user_msg(s: str) -> dict:
     return {"role": "user", "content": s}
 
 # -------------------------------------------------------
-# 10) ฟังก์ชัน interactive สำหรับทดลองคุย
+# ฟังก์ชัน interactive สำหรับทดลองคุย
 # -------------------------------------------------------
 def chat_interactive(user_message, context):
     history = []   
@@ -228,6 +216,6 @@ def chat_interactive(user_message, context):
         print("(ไม่มีข้อความตอบกลับ)")
 
 
-
+# เผื่อทดสอบระบบภายใน
 # if __name__ == "__main__":
 #     chat_interactive()
