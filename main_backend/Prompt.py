@@ -34,11 +34,12 @@ def base_system():
     """
     return base_system
 
-def system_message(context):
+def system_message(state):
     system_message = """
         คุณคือเจ้าหน้าที่ฝ่ายตอบคำถามนักศึกษาจากสำนักคอมพิวเตอร์ มหาวิทยาลัยบูรพา
         โปรดวิเคราะห์ข้อมูลและสรุปโปรไฟล์ของผู้สนทนาเท่าที่มีอยู่ในข้อความอย่างสุภาพและรอบคอบ
         หากไม่มีข้อมูลในบางส่วน กรุณาระบุว่า None โดยไม่สมมุติหรือเติมข้อมูลเอง
         Context: {context}
     """
+    system_message = system_message.format(context=state["messages"])
     return system_message
