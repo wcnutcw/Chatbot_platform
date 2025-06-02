@@ -101,6 +101,7 @@ async def upload_files(
 
         session_id = str(uuid.uuid4())
 
+        # wait update in the future
         # if db_type == "Pinecone":
         #     # ✅ เช็กว่า index_name มีค่าหรือไม่
         #     if not index_name:
