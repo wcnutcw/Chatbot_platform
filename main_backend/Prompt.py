@@ -55,7 +55,7 @@ def base_system(context_p, emotional_p):
     และโดยใช้ข้อมูลนี้มาจากหลายไฟล์ เช่น PDF, Word, Excel, CSV หรือรูปภาพ รวมถึง flowchart ด้วยนะ: "{context}"  
                                                        
     อารมณ์ของผู้ถาม : "{emotional}"  
-    โดยอารมณ์ของถามมี 6 ประเภทคือ pleasant, neutral, surprise, sadness, fear, anger  
+    โดยอารมณ์ของผู้ถามมี 6 ประเภทคือ pleasant, neutral, surprise, sadness, fear, anger  
     โดยถ้าอารมณ์ของผู้ตอบเป็นแบบไหน ให้คุณตอบแบบโทนตามนี้:  
     - pleasant: เป็นมิตร อบอุ่น สุภาพ เป็นกันเอง  
     - neutral: กลาง ๆ สุภาพ ชัดเจน  
