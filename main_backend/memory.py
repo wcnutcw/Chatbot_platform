@@ -115,18 +115,18 @@ def GetProfileNode(state: dict) -> dict:
 #  ฟังก์ชัน ChatNode (ใช้ Pinecone similarity_search ภายใน namespace "test-buu")
 # -------------------------------------------------------
 
-def ChatNode(state: dict, context, is_first_greeting: bool = False) -> dict:
+def ChatNode(state: dict, context ,emotional :str, is_first_greeting: bool = False) -> dict:
     global store, namespace_for_memory, embeddings_model, llm_model, vectorstore
 
-    pdf_context = ""
+    context_p = ""
     if isinstance(context, list):
         for doc in context:
             if hasattr(doc, "page_content"):
-                pdf_context += f"{doc.page_content}\n\n"
+                context_p += f"{doc.page_content}\n\n"
             else:
-                pdf_context += str(doc) + "\n\n"
+                context_p += str(doc) + "\n\n"
     else:
-        pdf_context = str(context)
+        context_p = str(context)
 
     # ดึงข้อมูลโปรไฟล์ผู้ใช้จาก store
     user_profile_mem = store.get(namespace_for_memory, key="profile")
@@ -141,8 +141,8 @@ def ChatNode(state: dict, context, is_first_greeting: bool = False) -> dict:
             f"Hobby: {pdata.get('hobby')}\n\n"
         )
     from Prompt import base_system
-    base_system = base_system()
-    system_message = base_system + "\n\n" + profile_str + "File Context (relevant chunks):\n" + pdf_context
+    base_system = base_system(context_p,emotional)
+    system_message = base_system + "\n\n" + profile_str + "File Context (relevant chunks):\n" 
 
     # เรียกใช้ llm_model เพื่อให้ได้ผลลัพธ์ตอบกลับ
     result = llm_model.invoke({
@@ -191,7 +191,7 @@ def user_msg(s: str) -> dict:
 # -------------------------------------------------------
 #  ฟังก์ชัน interactive สำหรับทดลองคุย
 # -------------------------------------------------------
-def chat_interactive(user_message, context):
+def chat_interactive(user_message, context,emotional):
     history = []   
     is_first_greeting = True
     # print(f"ME :{user_message}")
@@ -200,7 +200,7 @@ def chat_interactive(user_message, context):
     input_state = {"messages": history}
 
     # ส่ง input_state ทั้งหมด ไม่ใช่แค่ user_query
-    response_state, _ = ChatNode(input_state, context, is_first_greeting)
+    response_state, _ = ChatNode(input_state, context,emotional, is_first_greeting)
 
     is_first_greeting = False
     assistant_msgs = [

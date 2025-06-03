@@ -26,6 +26,7 @@ from embed_MongoDB import *
 from retrival_MongoDB import *
 from Prompt import *
 from token_reduceContext import *
+from OCR_READ import process_image_and_ocr_then_chat
 import requests
 from fastapi import Request, Response, HTTPException
 from fastapi.responses import JSONResponse
@@ -69,6 +70,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+#APIKEY_AIFORTHAI
+url_emotional=os.getenv("url_emotional")
+api_key_aiforthai_emotional=os.getenv("api_key_aiforthai_emotional")
 
 agents = {}
 
@@ -207,7 +212,7 @@ async def upload_files(
 
 
 @app.post("/query")
-async def query(session_id: str, question: str):
+async def query(session_id: str, question: str,emotional:str):
     try:
         log = logs_collection.find_one({"session_id": session_id})
         if not log:
@@ -234,7 +239,7 @@ async def query(session_id: str, question: str):
         else:
             return JSONResponse(content={"error": "Invalid db_type"}, status_code=400)
 
-        prompt = Prompt_Template(context,question) 
+        prompt = Prompt_Template(context,question,emotional) 
 
         llm = ChatOpenAI(
             temperature=0,
@@ -332,7 +337,7 @@ async def send_facebook_message(sender_id: str, message: str):
 
 from memory import *
 # ฟังก์ชันสำหรับประมวลผลข้อความจาก chatbot
-async def process_chatbot_query(sender_id: str, user_message: str):
+async def process_chatbot_query(sender_id: str, user_message: str, emotional:str):
     """Process user message through chatbot and return response"""
     try:
         session_id = f"fb_{sender_id}"
@@ -378,7 +383,7 @@ async def process_chatbot_query(sender_id: str, user_message: str):
 
 
         """  UPDATE MEMORY"""
-        response = chat_interactive(user_message,context)
+        response = chat_interactive(user_message,context,emotional)
         # response = await llm.ainvoke(prompt)
         return response
 
@@ -386,23 +391,21 @@ async def process_chatbot_query(sender_id: str, user_message: str):
         logging.error(f"Error in chatbot processing: {e}")
         return "ขออภัย เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง"
     
- # Wait for future updates to enter the database
-def is_message_processed(message_id):
-    try:
-        with open('processed_messages.txt', 'r') as file:
-            processed_messages = file.readlines()
-            if message_id + '\n' in processed_messages:
-                return True
-    except FileNotFoundError:
-        pass
-    return False
+# สร้าง set เก็บ message_id ที่ประมวลผลแล้ว (ใช้ในหน่วยความจำเท่านั้น)
+processed_message_ids = set()
 
-# Wait for editing to enter the database to store the conversation between the user.
+def is_message_processed(message_id):
+    """ตรวจสอบว่า message_id นี้ถูกประมวลผลแล้วหรือไม่"""
+    return message_id in processed_message_ids
+
 def mark_message_as_processed(message_id):
-    with open('processed_messages.txt', 'a') as file:
-        file.write(message_id + '\n')
+    """บันทึก message_id ว่าประมวลผลแล้ว"""
+    processed_message_ids.add(message_id)
     
 # Webhook สำหรับรับข้อความจาก Facebook
+from fastapi import Request, Response
+import logging
+
 @app.post('/webhook')
 async def receive_message(request: Request):
     try:
@@ -412,64 +415,93 @@ async def receive_message(request: Request):
         if "entry" in data:
             for entry in data["entry"]:
                 for messaging_event in entry.get("messaging", []):
-                    sender_id = messaging_event["sender"]["id"]
 
-                    # ข้าม event ที่ไม่ใช่ข้อความ
-                    if any(key in messaging_event for key in ["postback", "read", "delivery"]):
-                        event_type = "read" if "read" in messaging_event else "delivery" if "delivery" in messaging_event else "postback"
-                        print(f"Ignored {event_type} event from user {sender_id}")
-                        continue
-                    
-                    # ตรวจสอบว่ามีข้อความหรือไม่
+                    # ... รหัสเดิม เช่น ดักกรอง event ต่าง ๆ
+
+                    # ตรวจสอบ message
                     if "message" not in messaging_event:
-                        print("No message found, skipping...")
                         continue
 
-                    user_message = messaging_event["message"].get("text", "").strip()
+                    if messaging_event["message"].get("is_echo"):
+                        continue
+
+                    sender_id = messaging_event["sender"]["id"]
                     message_id = messaging_event["message"].get("mid")
 
-                    # ข้ามข้อความเปล่า
-                    if not user_message:
-                        print("Empty message, skipping...")
-                        continue
-                    
-                    # ข้ามข้อความจาก bot เอง
-                    if messaging_event["message"].get("is_echo"):
-                        print("Bot echo message, skipping...")
+                    if message_id and is_message_processed(message_id):
                         continue
 
-                    # ป้องกันข้อความซ้ำ
-                    if is_message_processed(message_id):
-                        print(f"Duplicate message detected: {message_id}, skipping...")
+                    # ดึงข้อความปกติ
+                    user_message = messaging_event["message"].get("text", "").strip()
+
+                    # ดึง attachments (รูปภาพ)
+                    attachments = messaging_event["message"].get("attachments", [])
+                    ocr_texts = []
+
+                    if attachments:
+                        for attachment in attachments:
+                            if attachment.get("type") == "image":
+                                image_url = attachment["payload"].get("url")
+                                if image_url:
+                                    print(f"Received image from user {sender_id}: {image_url}")
+                                    try:
+                                        ocr_text = await process_image_and_ocr_then_chat(image_url)
+                                        if ocr_text:
+                                            ocr_texts.append(ocr_text)
+                                    except Exception as e:
+                                        logging.error(f"Error OCR image from {sender_id}: {e}")
+
+                    # รวมข้อความปกติ + ข้อความ OCR จากรูปภาพ
+                    combined_texts = []
+                    if user_message:
+                        combined_texts.append(user_message)
+                    combined_texts.extend(ocr_texts)
+
+                    if not combined_texts:
+                        print("No text or OCR to process, skipping...")
                         continue
 
-                    # บันทึกว่าข้อความนี้ถูกประมวลผลแล้ว
-                    mark_message_as_processed(message_id)
+                    final_text = " ".join(combined_texts)
+                    print(f"Combined text to process: {final_text}")
 
-                    print(f"Received message from user {sender_id}: {user_message}")
+                    if message_id:
+                        mark_message_as_processed(message_id)
 
-                    # ประมวลผลข้อความผ่าน chatbot
+                    # วิเคราะห์อารมณ์จาก user_message เท่านั้น (ถ้ามี)
+                    max_emotion = None
+                    if user_message:
+                        try:
+                            url = f"{url_emotional}"
+                            headers = {"apikey": f"{api_key_aiforthai_emotional}"}
+                            params = {"text": user_message}
+                            response = requests.get(url, params=params, headers=headers)
+                            if response.status_code == 200:
+                                data = response.json()
+                                if data.get("status") == "success":
+                                    result = data.get("result", {})
+                                    max_emotion = max(result, key=result.get)
+                        except Exception as e:
+                            logging.error(f"Error calling emotional API: {e}")
+
+                    # ประมวลผลและตอบกลับแค่ครั้งเดียว
                     try:
-                        bot_response = await process_chatbot_query(sender_id, user_message)
-                        
-                        # ส่งข้อความกลับไปยัง Facebook
+                        bot_response = await process_chatbot_query(sender_id, final_text, max_emotion)
                         success = await send_facebook_message(sender_id, bot_response)
-                        
                         if success:
-                            print(f"Successfully sent response to user {sender_id}")
+                            print(f"Sent response to user {sender_id}")
                         else:
                             print(f"Failed to send response to user {sender_id}")
-                            
                     except Exception as e:
                         logging.error(f"Error processing message from {sender_id}: {e}")
-                        # ส่งข้อความแสดงข้อผิดพลาด
                         await send_facebook_message(sender_id, "ขออภัยค่ะ/ครับ ขณะนี้ไม่สามารถให้คำตอบได้")
 
         return Response(content="ok", status_code=200)
-        
+
     except Exception as e:
-        logging.error(f"Error in webhook: {e}")
+        logging.error(f"Error in webhook handler: {e}")
         return Response(content="error", status_code=500)
+
+
 
 # Webhook verification สำหรับ Facebook
 @app.get('/webhook')

@@ -173,6 +173,7 @@ if show_file_uploader and uploaded_files:
 # แสดงช่องถามคำถามเมื่อ session พร้อม
 if "session_id" in st.session_state or session_ready:
     question = st.text_input("Ask a question about your data:")
+    
     if st.button("Ask"):
         res = requests.post(
             "http://localhost:8000/query",
