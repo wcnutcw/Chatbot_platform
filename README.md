@@ -19,6 +19,7 @@ MONGO_URL=your_localhost_or_remote_url
 PINECONE_API_KEY=your_pinecone_api_key
 PINECONE_ENV=your_pinecone_environment
 EMBEDDING=embedding_model_name_from_openai
+FACEBOOK_ACCESS_TOKEN = TOKEN_API_FACEBOOK
 HF_TOKEN=your_huggingface_token</pre>
 
 ## 🧪 วิธีรันโปรเจกต์
