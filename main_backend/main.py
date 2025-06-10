@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pymongo import MongoClient
 import pandas as pd
@@ -31,6 +31,9 @@ import requests
 from fastapi import Request, Response, HTTPException
 from fastapi.responses import JSONResponse
 import datetime
+import smtplib
+from email.message import EmailMessage
+from datetime import datetime
 
 current_directory = os.getcwd()
 print("Current Directory:", current_directory) 
@@ -39,7 +42,6 @@ env_path = Path(current_directory).parent / 'venv' / '.env'
 print("Env Path:", env_path)  
 
 load_dotenv(dotenv_path=env_path,override=True)
-
 
 nest_asyncio.apply()
 
@@ -59,6 +61,9 @@ client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 #TOKEN_FACEBOOK
 FACEBOOK_ACCESS_TOKEN = os.getenv("FACEBOOK_ACCESS_TOKEN")
+
+EMAIL_ADMIN = os.getenv("EMAIL_ADMIN")
+EMAIL_PASS = os.getenv("EMAIL_PASS")
 
 # FastAPI
 app = FastAPI()
@@ -407,10 +412,17 @@ from fastapi import Request, Response
 import logging
 
 @app.post('/webhook')
-async def receive_message(request: Request):
+async def receive_message(request: Request, background_tasks: BackgroundTasks):
     try:
         data = await request.json()
         print("DEBUG: Received Event:", data)
+
+        entry = data.get("entry", [])[0]
+        messaging = entry.get("messaging", [])[0]
+
+        sender_id = messaging["sender"]["id"]
+        timestamp = messaging["timestamp"]
+        message_text = messaging.get("message", {}).get("text", "")
 
         if "entry" in data:
             for entry in data["entry"]:
@@ -467,6 +479,11 @@ async def receive_message(request: Request):
                     if message_id:
                         mark_message_as_processed(message_id)
 
+                    if "ติดต่อเจ้าหน้าที่" in message_text:
+                        background_tasks.add_task(send_alert_email, sender_id, message_text, timestamp)
+                        await send_facebook_message(sender_id, "กรุณารอเจ้าหน้าที่มาตอบนะคะ/ครับ")
+                        return Response(content="ok", status_code=200)
+
                     # วิเคราะห์อารมณ์จาก user_message เท่านั้น (ถ้ามี)
                     max_emotion = None
                     if user_message:
@@ -513,3 +530,41 @@ async def verify_webhook(request: Request):
         return Response(content=challenge, status_code=200)
     else:
         return Response(content="Invalid verification token", status_code=403)
+
+
+def send_alert_email(fb_id: str, message: str, timestamp: int):
+    dt = datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
+
+    user_name = get_facebook_user_name(fb_id, FACEBOOK_ACCESS_TOKEN)
+    
+    email = EmailMessage()
+    email["Subject"] = "แจ้งเตือนจากแชทบอท: ติดต่อเจ้าหน้าที่"
+    email["From"] = EMAIL_ADMIN
+    email["To"] = EMAIL_ADMIN
+    
+    email.set_content(f"""
+มีการขอ "ติดต่อเจ้าหน้าที่"
+
+👤 ผู้ใช้: {user_name}
+🕒 เวลา: {dt}
+📝 ข้อความ: {message}""")
+    
+    with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
+        smtp.starttls()
+        smtp.login(EMAIL_ADMIN, EMAIL_PASS)
+        smtp.send_message(email)
+
+
+def get_facebook_user_name(fb_id: str, access_token: str) -> str:
+    try:
+        url = f"https://graph.facebook.com/{fb_id}?fields=first_name,last_name&access_token={access_token}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            first_name = data.get("first_name", "")
+            last_name = data.get("last_name", "")
+            return f"{first_name} {last_name}".strip()
+        else:
+            return f"[ไม่สามารถดึงชื่อได้: {fb_id}]"
+    except Exception as e:
+        return f"[Error: {fb_id}]"
