@@ -398,25 +398,32 @@ async def process_chatbot_query(sender_id: str, user_message: str, emotional:str
 
 from sentence_transformers import SentenceTransformer, util
 
+# โหลด model (ทำครั้งเดียวตอน start app)
 model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
 
+# กำหนดประโยคตัวอย่างที่ต้องการตรวจจับความหมาย
 target_phrases = [
     "ติดต่อเจ้าหน้าที่",
-    "แจ้งเจ้าหน้าที่",   
-    "ขอคุยกับเจ้าหน้าที่",                    
+    "แจ้งเจ้าหน้าที่",
+    "ขอคุยกับเจ้าหน้าที่",
     "อยากคุยกับแอดมิน",
     "ขอความช่วยเหลือจากเจ้าหน้าที่",
     "แอดมินอยู่ไหม",
     "รบกวนติดต่อเจ้าหน้าที่"
 ]
+
+# เข้ารหัส (embedding) ของประโยคเป้าหมายทั้งหมดครั้งเดียว
 target_embeddings = model.encode(target_phrases, convert_to_tensor=True)
 
+# ฟังก์ชันตรวจสอบข้อความว่าคล้ายกับกลุ่ม target หรือไม่
 def is_similar_to_contact_staff(message_text, threshold=0.7):
+    # เข้ารหัสข้อความที่ผู้ใช้ส่งมา
     input_embedding = model.encode(message_text, convert_to_tensor=True)
+    # คำนวณความคล้ายกัน (cosine similarity) กับทุก target
     cosine_scores = util.pytorch_cos_sim(input_embedding, target_embeddings)
+    # เอาคะแนนสูงสุดในกลุ่มมาเช็ค
     max_score = cosine_scores.max().item()
-    return max_score >= threshold
-
+    return max_score >= threshold 
 
 # สร้าง set เก็บ message_id ที่ประมวลผลแล้ว (ใช้ในหน่วยความจำเท่านั้น)
 processed_message_ids = set()
@@ -501,10 +508,10 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                     if message_id:
                         mark_message_as_processed(message_id)
                     
-                    # ในฟังก์ชันหลัก (เช่น fastapi endpoint)
-                    if is_similar_to_contact_staff(message_text):
+                    # NLP similar word
+                    if "ติดต่อเจ้าหน้าที่" in message_text:
                         background_tasks.add_task(send_alert_email, sender_id, message_text, timestamp)
-                        await send_facebook_message(sender_id, "กรุณารอเจ้าหน้าที่มาตอบนะครับ")
+                        await send_facebook_message(sender_id, "กรุณารอเจ้าหน้าที่มาตอบนะคะ/ครับ")
                         return Response(content="ok", status_code=200)
 
                     # วิเคราะห์อารมณ์จาก user_message เท่านั้น (ถ้ามี)
