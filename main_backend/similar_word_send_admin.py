@@ -1,4 +1,4 @@
-
+#รอพัฒนาในอนาคตต่อไป
 from sentence_transformers import SentenceTransformer, util
 
 model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')

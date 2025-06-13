@@ -445,105 +445,52 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
     try:
         data = await request.json()
         print("DEBUG: Received Event:", data)
-
-        entry = data.get("entry", [])[0]
-        messaging = entry.get("messaging", [])[0]
-
-        sender_id = messaging["sender"]["id"]
-        timestamp = messaging["timestamp"]
-        message_text = messaging.get("message", {}).get("text", "")
-
         if "entry" in data:
             for entry in data["entry"]:
                 for messaging_event in entry.get("messaging", []):
-
-                    # ... รหัสเดิม เช่น ดักกรอง event ต่าง ๆ
-
-                    # ตรวจสอบ message
                     if "message" not in messaging_event:
                         continue
-
                     if messaging_event["message"].get("is_echo"):
                         continue
-
                     sender_id = messaging_event["sender"]["id"]
                     message_id = messaging_event["message"].get("mid")
-
                     if message_id and is_message_processed(message_id):
                         continue
-
-                    # ดึงข้อความปกติ
                     user_message = messaging_event["message"].get("text", "").strip()
-
-                    # ดึง attachments (รูปภาพ)
                     attachments = messaging_event["message"].get("attachments", [])
                     ocr_texts = []
-
                     if attachments:
                         for attachment in attachments:
                             if attachment.get("type") == "image":
                                 image_url = attachment["payload"].get("url")
                                 if image_url:
-                                    print(f"Received image from user {sender_id}: {image_url}")
                                     try:
                                         ocr_text = await process_image_and_ocr_then_chat(image_url)
                                         if ocr_text:
                                             ocr_texts.append(ocr_text)
                                     except Exception as e:
                                         logging.error(f"Error OCR image from {sender_id}: {e}")
-
-                    # รวมข้อความปกติ + ข้อความ OCR จากรูปภาพ
                     combined_texts = []
                     if user_message:
                         combined_texts.append(user_message)
                     combined_texts.extend(ocr_texts)
-
                     if not combined_texts:
-                        print("No text or OCR to process, skipping...")
                         continue
-
                     final_text = " ".join(combined_texts)
-                    print(f"Combined text to process: {final_text}")
-
-                    if message_id:
-                        mark_message_as_processed(message_id)
-                    
-                    # NLP similar word
-                    if "ติดต่อเจ้าหน้าที่" in message_text:
-                        background_tasks.add_task(send_alert_email, sender_id, message_text, timestamp)
-                        await send_facebook_message(sender_id, "กรุณารอเจ้าหน้าที่มาตอบนะคะ/ครับ")
+                    # ตรวจสอบและส่ง email alert
+                    if "ติดต่อเจ้าหน้าที่" in user_message:
+                        background_tasks.add_task(send_alert_email, sender_id, user_message, 0)
+                        await send_facebook_message(sender_id, "ทางเราได้ส่งคำขอของคุณไปหาเจ้าหน้าที่แล้ว ตอนนี้คุณมีอะไรสอบถามทางบอทก่อนหรือไม่")
                         return Response(content="ok", status_code=200)
-
-                    # วิเคราะห์อารมณ์จาก user_message เท่านั้น (ถ้ามี)
+                    # วิเคราะห์อารมณ์ (ใส่ logic เอง ถ้าต้องการ)
                     max_emotion = None
-                    if user_message:
-                        try:
-                            url = f"{url_emotional}"
-                            headers = {"apikey": f"{api_key_aiforthai_emotional}"}
-                            params = {"text": user_message}
-                            response = requests.get(url, params=params, headers=headers)
-                            if response.status_code == 200:
-                                data = response.json()
-                                if data.get("status") == "success":
-                                    result = data.get("result", {})
-                                    max_emotion = max(result, key=result.get)
-                        except Exception as e:
-                            logging.error(f"Error calling emotional API: {e}")
-
-                    # ประมวลผลและตอบกลับแค่ครั้งเดียว
                     try:
-                        bot_response = await process_chatbot_query(sender_id, final_text, max_emotion)
-                        success = await send_facebook_message(sender_id, bot_response)
-                        if success:
-                            print(f"Sent response to user {sender_id}")
-                        else:
-                            print(f"Failed to send response to user {sender_id}")
+                        bot_response = chat_interactive(sender_id, final_text, [], max_emotion)
+                        await send_facebook_message(sender_id, bot_response)
                     except Exception as e:
                         logging.error(f"Error processing message from {sender_id}: {e}")
                         await send_facebook_message(sender_id, "ขออภัยค่ะ/ครับ ขณะนี้ไม่สามารถให้คำตอบได้")
-
         return Response(content="ok", status_code=200)
-
     except Exception as e:
         logging.error(f"Error in webhook handler: {e}")
         return Response(content="error", status_code=500)
