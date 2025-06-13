@@ -94,5 +94,8 @@ HF_TOKEN=your_huggingface_token</pre>
 หากมี error แจ้งว่าขาด library ใด ให้ติดตั้งเพิ่มด้วยคำสั่ง:
 ```pip install <library_name>```
 
+## วิธี Run DOCKER 
+```docker run -d -p 5000:5000 -e OPENAI_API_KEY="your-openai-api-key-here" chatbot_ai_platform```
+
 ## 🙋‍♂️ ติดต่อ
 หากพบปัญหาหรือข้อเสนอแนะ กรุณาเปิด Issue หรือ pull request
