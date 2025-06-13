@@ -8,3 +8,5 @@ main_backend/my_model_cache/
 test_backend/__pycache__/
 test/OCR/my_model_cache/
 venv/
+frontend/node_modules
+frontend/__pycache__

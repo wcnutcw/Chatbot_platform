@@ -478,7 +478,8 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
 
                     if message_id:
                         mark_message_as_processed(message_id)
-
+                    
+                    # NLP similar word
                     if "ติดต่อเจ้าหน้าที่" in message_text:
                         background_tasks.add_task(send_alert_email, sender_id, message_text, timestamp)
                         await send_facebook_message(sender_id, "กรุณารอเจ้าหน้าที่มาตอบนะคะ/ครับ")
@@ -532,6 +533,7 @@ async def verify_webhook(request: Request):
         return Response(content="Invalid verification token", status_code=403)
 
 
+# SEND EMAIL
 def send_alert_email(fb_id: str, message: str, timestamp: int):
     dt = datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
 
@@ -553,6 +555,7 @@ def send_alert_email(fb_id: str, message: str, timestamp: int):
         smtp.starttls()
         smtp.login(EMAIL_ADMIN, EMAIL_PASS)
         smtp.send_message(email)
+
 
 
 def get_facebook_user_name(fb_id: str, access_token: str) -> str:
