@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pymongo import MongoClient
 import pandas as pd
@@ -31,6 +31,11 @@ import requests
 from fastapi import Request, Response, HTTPException
 from fastapi.responses import JSONResponse
 import datetime
+import smtplib
+from email.message import EmailMessage
+from datetime import datetime
+from typing import List 
+import traceback
 
 current_directory = os.getcwd()
 print("Current Directory:", current_directory) 
@@ -39,7 +44,6 @@ env_path = Path(current_directory).parent / 'venv' / '.env'
 print("Env Path:", env_path)  
 
 load_dotenv(dotenv_path=env_path,override=True)
-
 
 nest_asyncio.apply()
 
@@ -60,6 +64,10 @@ client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 #TOKEN_FACEBOOK
 FACEBOOK_ACCESS_TOKEN = os.getenv("FACEBOOK_ACCESS_TOKEN")
 
+#EMAIL
+EMAIL_ADMIN = os.getenv("EMAIL_ADMIN")
+EMAIL_PASS = os.getenv("EMAIL_PASS")
+
 # FastAPI
 app = FastAPI()
 # Allow CORS
@@ -77,6 +85,142 @@ api_key_aiforthai_emotional=os.getenv("api_key_aiforthai_emotional")
 
 agents = {}
 
+@app.post("/upsert")
+async def upsert_data(
+    db_type: str = Form(...),
+    db_name: str = Form(None),
+    collection_name: str = Form(None),
+    index_name: str = Form(None),
+    namespace: str = Form(None),
+    files: List[UploadFile] = File(...)
+):
+    try:
+        # ตรวจสอบว่าอัปโหลดไฟล์หรือไม่
+        if not files or len(files) == 0:
+            return JSONResponse(content={"error": "No files uploaded"}, status_code=400)
+
+        # เริ่มนับเวลา
+        start_time = time.perf_counter()
+
+        # แปลงไฟล์ที่อัปโหลด
+        result_file = await Up_File(files)  # ✅ แก้ตรงนี้
+
+        # สร้าง DataFrame จากข้อมูลที่แปลง
+        df = pd.DataFrame(result_file["dataframe"])
+
+        # ตรวจสอบว่า DataFrame ว่างหรือไม่
+        if df.empty:
+            return JSONResponse(content={"error": "Uploaded file is empty"}, status_code=400)
+
+        session_id = str(uuid.uuid4())
+
+        # wait update in the future
+        # if db_type == "Pinecone":
+        #     # ✅ เช็กว่า index_name มีค่าหรือไม่
+        #     if not index_name:
+        #         return JSONResponse(content={"error": "Missing index_name for Pinecone"}, status_code=400)
+
+        #     if index_name in pc.list_indexes().names():
+        #         pc.delete_index(index_name)
+
+        #     spec = ServerlessSpec(cloud="aws", region=PINECONE_ENV)
+        #     pc.create_index(name=index_name, dimension=1536, metric="cosine", spec=spec)
+        #     index = pc.Index(index_name)
+
+        #     embeddings = await embed_all_rows(df)  # ✅ สมมติว่าฟังก์ชันนี้แก้แล้ว ไม่เช็กผิด
+        #     vectors = [{
+        #         "id": f"vec-{i}",
+        #         "values": embeddings[i],
+        #         "metadata": df.iloc[i].to_dict()
+        #     } for i in range(len(embeddings))]
+
+        #     index.upsert(vectors=vectors, namespace=namespace)
+
+        #     # Log ลง MongoDB
+        #     log = {
+        #         "session_id": session_id,
+        #         "db_type": "Pinecone",
+        #         "files": [f.filename for f in files],
+        #         "index_name": index_name,
+        #         "namespace": namespace,
+        #         "timestamp": pd.Timestamp.now().isoformat()
+        #     }
+        #     logs_collection.insert_one(log)
+
+        #     agent = create_pandas_dataframe_agent(
+        #         ChatOpenAI(temperature=0, model="gpt-4"),
+        #         df,
+        #         verbose=True,
+        #         allow_dangerous_code=True
+        #     )
+        #     agents[session_id] = agent
+
+        if db_type == "MongoDB":
+            if not db_name or not collection_name:
+                return JSONResponse(content={"error": "Missing db_name or collection_name for MongoDB"}, status_code=400)
+
+            # เชื่อมต่อกับ MongoDB
+            file_db = mongo_client[db_name]
+            collection = file_db[collection_name]
+
+            texts = []
+            metadata_list = []
+
+            for i, row in df.iterrows():
+                metadata = row.to_dict()
+                text = "\n".join([f"{k}: {v}" for k, v in metadata.items()])
+                texts.append(text)
+                # ✅ ปรับ _id ให้ไม่ซ้ำ (ผูกกับ session_id เพื่อสะสมข้อมูล)
+                metadata_list.append((f"{session_id}-vec-{i}", metadata))
+
+            # ตรวจสอบค่า null ใน DataFrame
+            if df.isnull().all(axis=1).any():
+                df = df.fillna('')  # หรือจะใช้ dropna() ก็ได้
+
+            # สร้าง embeddings
+            embeddings = await embed_result_all(df, EMBEDDING_MODEL)
+
+            documents = []
+            for (vec_id, metadata), embedding, raw_text in zip(metadata_list, embeddings, texts):
+                documents.append({
+                    "_id": vec_id,
+                    "embedding": embedding,
+                    "metadata": metadata,
+                    "raw_text": raw_text
+                })
+
+            # อัปเดตข้อมูลลง MongoDB (ไม่ลบของเก่า ใช้ upsert)
+            for doc in documents:
+                # หาก _id ตรงกันจะ update, ถ้าไม่มีจะ insert ใหม่
+                collection.update_one({"_id": doc["_id"]}, {"$set": doc}, upsert=True)
+
+            # วัดเวลาที่ใช้ในการประมวลผล
+            end_time = time.perf_counter()
+            processing_time = end_time - start_time
+            print(f"{processing_time:.2f} seconds")
+
+            # บันทึก log การประมวลผล
+            log = {
+                "session_id": session_id,
+                "db_type": "MongoDB",
+                "files": [f.filename for f in files],
+                "db_name": db_name,
+                "collection_name": collection_name,
+                "timestamp": pd.Timestamp.now().isoformat()
+            }
+            logs_collection.insert_one(log)
+
+        else:
+            return JSONResponse(content={"error": f"Unsupported db_type: {db_type}"}, status_code=400)
+
+        return {"session_id": session_id}
+
+    except Exception as e:
+        logging.error(f"Error in /upsert endpoint: {str(e)}")
+        print(traceback.format_exc())
+        return JSONResponse(content={"error": f"Internal server error: {str(e)}"}, status_code=500)
+
+    
 @app.post("/upload")
 async def upload_files(
     files: list[UploadFile] = File(...),
@@ -390,7 +534,9 @@ async def process_chatbot_query(sender_id: str, user_message: str, emotional:str
     except Exception as e:
         logging.error(f"Error in chatbot processing: {e}")
         return "ขออภัย เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง"
-    
+
+
+
 # สร้าง set เก็บ message_id ที่ประมวลผลแล้ว (ใช้ในหน่วยความจำเท่านั้น)
 processed_message_ids = set()
 
@@ -407,67 +553,54 @@ from fastapi import Request, Response
 import logging
 
 @app.post('/webhook')
-async def receive_message(request: Request):
+async def receive_message(request: Request, background_tasks: BackgroundTasks):
     try:
         data = await request.json()
         print("DEBUG: Received Event:", data)
-
         if "entry" in data:
             for entry in data["entry"]:
                 for messaging_event in entry.get("messaging", []):
-
-                    # ... รหัสเดิม เช่น ดักกรอง event ต่าง ๆ
-
-                    # ตรวจสอบ message
                     if "message" not in messaging_event:
                         continue
-
                     if messaging_event["message"].get("is_echo"):
                         continue
-
                     sender_id = messaging_event["sender"]["id"]
                     message_id = messaging_event["message"].get("mid")
-
                     if message_id and is_message_processed(message_id):
                         continue
-
-                    # ดึงข้อความปกติ
                     user_message = messaging_event["message"].get("text", "").strip()
-
-                    # ดึง attachments (รูปภาพ)
                     attachments = messaging_event["message"].get("attachments", [])
-                    ocr_texts = []
 
+                    if message_id:
+                            mark_message_as_processed(message_id)
+
+                    ocr_texts = []
                     if attachments:
                         for attachment in attachments:
                             if attachment.get("type") == "image":
                                 image_url = attachment["payload"].get("url")
                                 if image_url:
-                                    print(f"Received image from user {sender_id}: {image_url}")
                                     try:
                                         ocr_text = await process_image_and_ocr_then_chat(image_url)
                                         if ocr_text:
                                             ocr_texts.append(ocr_text)
                                     except Exception as e:
                                         logging.error(f"Error OCR image from {sender_id}: {e}")
-
-                    # รวมข้อความปกติ + ข้อความ OCR จากรูปภาพ
                     combined_texts = []
                     if user_message:
                         combined_texts.append(user_message)
                     combined_texts.extend(ocr_texts)
-
                     if not combined_texts:
-                        print("No text or OCR to process, skipping...")
                         continue
-
                     final_text = " ".join(combined_texts)
-                    print(f"Combined text to process: {final_text}")
 
-                    if message_id:
-                        mark_message_as_processed(message_id)
-
-                    # วิเคราะห์อารมณ์จาก user_message เท่านั้น (ถ้ามี)
+                    # ตรวจสอบและส่ง email alert
+                    if "ติดต่อเจ้าหน้าที่" in user_message:
+                        background_tasks.add_task(send_alert_email, sender_id, user_message, 0)
+                        await send_facebook_message(sender_id, "ทางเราได้ส่งคำขอของคุณไปหาเจ้าหน้าที่แล้ว ตอนนี้คุณมีอะไรสอบถามทางบอทก่อนหรือไม่")
+                        return Response(content="ok", status_code=200)
+                    
+                    # วิเคราะห์อารมณ์ 
                     max_emotion = None
                     if user_message:
                         try:
@@ -483,20 +616,15 @@ async def receive_message(request: Request):
                         except Exception as e:
                             logging.error(f"Error calling emotional API: {e}")
 
-                    # ประมวลผลและตอบกลับแค่ครั้งเดียว
+
                     try:
-                        bot_response = await process_chatbot_query(sender_id, final_text, max_emotion)
-                        success = await send_facebook_message(sender_id, bot_response)
-                        if success:
-                            print(f"Sent response to user {sender_id}")
-                        else:
-                            print(f"Failed to send response to user {sender_id}")
+                        bot_response = chat_interactive(sender_id, final_text,[], max_emotion)
+                        await send_facebook_message(sender_id, bot_response)
                     except Exception as e:
                         logging.error(f"Error processing message from {sender_id}: {e}")
                         await send_facebook_message(sender_id, "ขออภัยค่ะ/ครับ ขณะนี้ไม่สามารถให้คำตอบได้")
 
         return Response(content="ok", status_code=200)
-
     except Exception as e:
         logging.error(f"Error in webhook handler: {e}")
         return Response(content="error", status_code=500)
@@ -513,3 +641,43 @@ async def verify_webhook(request: Request):
         return Response(content=challenge, status_code=200)
     else:
         return Response(content="Invalid verification token", status_code=403)
+
+
+# SEND EMAIL
+def send_alert_email(fb_id: str, message: str, timestamp: int):
+    dt = datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
+
+    user_name = get_facebook_user_name(fb_id, FACEBOOK_ACCESS_TOKEN)
+    
+    email = EmailMessage()
+    email["Subject"] = "แจ้งเตือนจากแชทบอท: ติดต่อเจ้าหน้าที่"
+    email["From"] = EMAIL_ADMIN
+    email["To"] = EMAIL_ADMIN
+    
+    email.set_content(f"""
+มีการขอ "ติดต่อเจ้าหน้าที่"
+
+👤 ผู้ใช้: {user_name}
+🕒 เวลา: {dt}
+📝 ข้อความ: {message}""")
+    
+    with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
+        smtp.starttls()
+        smtp.login(EMAIL_ADMIN, EMAIL_PASS)
+        smtp.send_message(email)
+
+
+
+def get_facebook_user_name(fb_id: str, access_token: str) -> str:
+    try:
+        url = f"https://graph.facebook.com/{fb_id}?fields=first_name,last_name&access_token={access_token}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            first_name = data.get("first_name", "")
+            last_name = data.get("last_name", "")
+            return f"{first_name} {last_name}".strip()
+        else:
+            return f"[ไม่สามารถดึงชื่อได้: {fb_id}]"
+    except Exception as e:
+        return f"[Error: {fb_id}]"

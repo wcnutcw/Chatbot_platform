@@ -1,12 +1,10 @@
 import os
 from dotenv import load_dotenv
 from pathlib import Path
-# === Import รุ่นใหม่ของ LangChain และ langchain-pinecone ===
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from pymongo import MongoClient
+from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 
-
-# LangGraph memory & workflow
 from langgraph.store.memory import InMemoryStore
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, START, END
@@ -16,24 +14,23 @@ from typing_extensions import TypedDict
 from typing import List, Optional
 
 
+MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
+mongo_client = MongoClient(MONGO_URI)
+db = mongo_client[os.getenv('MONGO_DB', 'chat_db')]
+if 'user_logs' not in db.list_collection_names():
+    db.create_collection('user_logs')
+userlog_col = db['user_logs']
 
-# โหลดตัวแปรจาก .env
+# --- .env ---
 load_dotenv()
-# --- โหลดค่า .env ---
 current_directory = os.getcwd()
-print("Current Directory:", current_directory)
-
 env_path = Path(current_directory).parent / 'venv' / '.env'
-print("Env Path:", env_path)
-
 load_dotenv(dotenv_path=env_path, override=True)
-
-# --- API Keys ---
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 llm = ChatOpenAI(
     model="gpt-4o-mini",
-    temperature=0,   # 0-1
+    temperature=0,
     openai_api_key=OPENAI_API_KEY
 )
 
@@ -42,17 +39,9 @@ prompt_template = ChatPromptTemplate.from_messages([
     MessagesPlaceholder("messages")
 ])
 llm_model = prompt_template | llm
-
-# -------------------------------------------------------
-#  เตรียม InMemoryStore สำหรับเก็บ Profile memory (global)
-# -------------------------------------------------------
 store = InMemoryStore()
-user_id = "1"
-namespace_for_memory = (user_id, "memories")
 
-# -------------------------------------------------------
-#  สร้าง Profile model และ structured_llm สำหรับดึงข้อมูลโปรไฟล์ (global)
-# -------------------------------------------------------
+# --- Profile Model ---
 class Profile(BaseModel):
     name: Optional[str]
     age: Optional[int]
@@ -61,28 +50,36 @@ class Profile(BaseModel):
 
 structured_llm = prompt_template | llm.with_structured_output(Profile, method="function_calling")
 
+def log_user_message_mongo(user_id: str, message: str):
+    userlog_col.insert_one({
+        'user_id': user_id,
+        'message': message.strip(),
+        'log_type': 'user',
+        'ts': int(__import__('time').time())
+    })
 
-# -------------------------------------------------------
-# Logging user message to file
-# -------------------------------------------------------
+def get_longterm_history(user_id: str, limit=10):
+    messages = []
+    cursor = userlog_col.find({'user_id': user_id}).sort('ts', 1).limit(limit * 2)
+    for entry in cursor:
+        if entry['log_type'] in ('user', 'assistant'):
+            messages.append({
+                "role": "user" if entry['log_type'] == 'user' else "assistant",
+                "content": entry['message']
+            })
+    if len(messages) > limit * 2:
+        messages = messages[-limit*2:]
+    return messages
 
-def log_user_message(message: str):
-    with open("user_log.txt", "a", encoding="utf-8") as f:
-        f.write(message.strip() + "\n")
-# Connect to MongoDB   ( in the furthur set timing  1 day )
-
-# -------------------------------------------------------
-#  ฟังก์ชัน GetProfileNode (รับแค่ state) ใช้ global store
-# -------------------------------------------------------
 def GetProfileNode(state: dict) -> dict:
-    global store, namespace_for_memory, structured_llm
+    global store, structured_llm
+    user_id = state.get('user_id', 'unknown')
+    namespace_for_memory = (user_id, "memories")
     from Prompt import system_message
-    # system_message.format(context=state["messages"])
     result = structured_llm.invoke({
         "system_message": system_message(state),
         "messages": [{"role": "user", "content": "get my profile info"}]
     })
-
     profile_mem = store.get(namespace_for_memory, key="profile")
     profile = profile_mem.value if profile_mem else {
         'name': None,
@@ -90,34 +87,27 @@ def GetProfileNode(state: dict) -> dict:
         'profession': None,
         'hobby': []
     }
-
     if not isinstance(profile['hobby'], list):
         profile['hobby'] = list(profile['hobby']) if profile['hobby'] else []
-
     if result.name:
         profile['name'] = result.name
     if result.age:
         profile['age'] = result.age
     if result.profession:
         profile['profession'] = result.profession
-
     if result.hobby:
         if isinstance(result.hobby, str):
             if result.hobby not in profile['hobby']:
                 profile['hobby'].append(result.hobby)
         elif isinstance(result.hobby, list):
             profile['hobby'] = list(set(profile['hobby']).union(result.hobby))
-
     store.put(namespace_for_memory, "profile", profile)
     return state
 
-# -------------------------------------------------------
-#  ฟังก์ชัน ChatNode (ใช้ Pinecone similarity_search ภายใน namespace "test-buu")
-# -------------------------------------------------------
-
-def ChatNode(state: dict, context ,emotional :str, is_first_greeting: bool = False) -> dict:
-    global store, namespace_for_memory, embeddings_model, llm_model, vectorstore
-
+def ChatNode(state: dict, context, emotional: str, is_first_greeting: bool = False) -> dict:
+    global store, llm_model
+    user_id = state.get('user_id', 'unknown')
+    namespace_for_memory = (user_id, "memories")
     context_p = ""
     if isinstance(context, list):
         for doc in context:
@@ -127,8 +117,6 @@ def ChatNode(state: dict, context ,emotional :str, is_first_greeting: bool = Fal
                 context_p += str(doc) + "\n\n"
     else:
         context_p = str(context)
-
-    # ดึงข้อมูลโปรไฟล์ผู้ใช้จาก store
     user_profile_mem = store.get(namespace_for_memory, key="profile")
     profile_str = ""
     if user_profile_mem:
@@ -141,16 +129,14 @@ def ChatNode(state: dict, context ,emotional :str, is_first_greeting: bool = Fal
             f"Hobby: {pdata.get('hobby')}\n\n"
         )
     from Prompt import base_system
-    base_system = base_system(context_p,emotional)
-    system_message = base_system + "\n\n" + profile_str + "File Context (relevant chunks):\n" 
-
-    # เรียกใช้ llm_model เพื่อให้ได้ผลลัพธ์ตอบกลับ
+    base_system = base_system(context_p, emotional)
+    system_message = base_system + "\n\n" + profile_str + "File Context (relevant chunks):\n"
+    ltm_msgs = get_longterm_history(user_id, limit=10)
+    merged_msgs = ltm_msgs + [m for m in state["messages"] if m not in ltm_msgs]
     result = llm_model.invoke({
         "system_message": system_message,
-        "messages": state["messages"]
+        "messages": merged_msgs
     })
-
-    # ตรวจสอบชนิดของผลลัพธ์ที่ได้มา และเตรียมข้อความตอบกลับ
     if hasattr(result, "content"):
         msg_content = result.content
         msg_to_add = {"role": getattr(result, "role", "assistant"), "content": msg_content}
@@ -162,17 +148,10 @@ def ChatNode(state: dict, context ,emotional :str, is_first_greeting: bool = Fal
         msg_to_add = {"role": "assistant", "content": msg_content}
     else:
         msg_to_add = {"role": "assistant", "content": str(result)}
-
-    # เพิ่มข้อความตอบกลับเข้าไปใน state
     state["messages"].append(msg_to_add)
     return state, context
 
-
-
-# -------------------------------------------------------
-#  สร้าง Graph Workflow และ Compile (ไม่ต้องส่ง store พารามิเตอร์)
-# -------------------------------------------------------
-State = TypedDict("State", {"messages": List[dict]})
+State = TypedDict("State", {"messages": List[dict], "user_id": str})
 graph_builder = StateGraph(State)
 
 graph_builder.add_node("ChatNode", ChatNode)
@@ -188,20 +167,13 @@ config = {"configurable": {"thread_id": 123}}
 def user_msg(s: str) -> dict:
     return {"role": "user", "content": s}
 
-# -------------------------------------------------------
-#  ฟังก์ชัน interactive สำหรับทดลองคุย
-# -------------------------------------------------------
-def chat_interactive(user_message, context,emotional):
-    history = []   
+def chat_interactive(user_id: str, user_message,context,emotional):
+    history = []
     is_first_greeting = True
-    # print(f"ME :{user_message}")
-    log_user_message(user_message)
+    log_user_message_mongo(user_id, user_message)
     history.append(user_msg(user_message))
-    input_state = {"messages": history}
-
-    # ส่ง input_state ทั้งหมด ไม่ใช่แค่ user_query
-    response_state, _ = ChatNode(input_state, context,emotional, is_first_greeting)
-
+    input_state = {"messages": history, "user_id": user_id}
+    response_state, _ = ChatNode(input_state,context,emotional, is_first_greeting)
     is_first_greeting = False
     assistant_msgs = [
         msg for msg in response_state["messages"]
@@ -209,13 +181,12 @@ def chat_interactive(user_message, context,emotional):
     ]
     if assistant_msgs:
         latest = assistant_msgs[-1]
-        # print("🤖Assistant:", latest.get("content"))
-        history.append(latest)
+        userlog_col.insert_one({
+            'user_id': user_id,
+            'message': latest.get('content'),
+            'log_type': 'assistant',
+            'ts': int(__import__('time').time())
+        })
         return latest.get("content")
     else:
         print("(ไม่มีข้อความตอบกลับ)")
-
-
-# เผื่อทดสอบระบบ
-# if __name__ == "__main__":
-#     chat_interactive()

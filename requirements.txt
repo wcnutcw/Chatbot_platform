@@ -4,13 +4,13 @@ pandas
 openpyxl
 streamlit
 requests
-langchain_experimental
-openai == 1.76.0
-tiktoken == 0.9.0
-langchain == 0.3.24
-sentence_transformers ==  4.1.0
-transformers == 4.51.3
-langchain_openai == 0.3.14
+langchain-experimental
+openai==1.76.0
+tiktoken==0.9.0
+langchain==0.3.24
+sentence_transformers==4.1.0
+transformers==4.51.3
+langchain-openai==0.3.14
 tabulate
 pymongo
 pinecone
@@ -18,16 +18,13 @@ datetime
 uuid
 dotenv
 nest_asyncio
-pydantic_settings
-torch 
-transformers 
+pydantic-settings
+torch
 torchvision
 tokenizers
 ipywidgets
-transformers
 PyPDF2
-langchain
-pdf2image 
+pdf2image
 Pillow
 pytesseract
 matplotlib
@@ -35,8 +32,5 @@ python-docx
 pdfplumber
 pymupdf
 python-multipart
-langchain
-langchain-openai 
-python-dotenv 
-"langchain-community>=0.3.0,<0.4.0"
+langchain-community>=0.3.0,<0.4.0
 langgraph
