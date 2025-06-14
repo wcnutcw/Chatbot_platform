@@ -517,17 +517,17 @@ async def process_chatbot_query(sender_id: str, user_message: str, emotional:str
 
         # prompt = Prompt_Template(context, user_message)
 
-        llm = ChatOpenAI(
-            temperature=0,
-            model="gpt-4o-mini",
-            api_key=OPENAI_API_KEY,
-            streaming=False,  # ปิด streaming สำหรับ Facebook response
-            callbacks=[StreamingStdOutCallbackHandler()]
-        )
+        # llm = ChatOpenAI(
+        #     temperature=0,
+        #     model="gpt-4o-mini",
+        #     api_key=OPENAI_API_KEY,
+        #     streaming=False,  # ปิด streaming สำหรับ Facebook response
+        #     callbacks=[StreamingStdOutCallbackHandler()]
+        # )
 
 
         """  UPDATE MEMORY"""
-        response = chat_interactive(user_message,context,emotional)
+        response = chat_interactive(session_id,user_message,context,emotional)
         # response = await llm.ainvoke(prompt)
         return response
 
@@ -592,7 +592,7 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                     combined_texts.extend(ocr_texts)
                     if not combined_texts:
                         continue
-                    final_text = " ".join(combined_texts)
+                    final_text_user = " ".join(combined_texts)
 
                     # ตรวจสอบและส่ง email alert
                     if "ติดต่อเจ้าหน้าที่" in user_message:
@@ -618,7 +618,7 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
 
 
                     try:
-                        bot_response = chat_interactive(sender_id, final_text,[], max_emotion)
+                        bot_response =  process_chatbot_query(sender_id, final_text_user, max_emotion)
                         await send_facebook_message(sender_id, bot_response)
                     except Exception as e:
                         logging.error(f"Error processing message from {sender_id}: {e}")

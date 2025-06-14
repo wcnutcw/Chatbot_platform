@@ -58,7 +58,7 @@ def log_user_message_mongo(user_id: str, message: str):
         'ts': int(__import__('time').time())
     })
 
-def get_longterm_history(user_id: str, limit=10):
+def get_longterm_history(user_id: str, limit=5):
     messages = []
     cursor = userlog_col.find({'user_id': user_id}).sort('ts', 1).limit(limit * 2)
     for entry in cursor:
@@ -131,7 +131,7 @@ def ChatNode(state: dict, context, emotional: str, is_first_greeting: bool = Fal
     from Prompt import base_system
     base_system = base_system(context_p, emotional)
     system_message = base_system + "\n\n" + profile_str + "File Context (relevant chunks):\n"
-    ltm_msgs = get_longterm_history(user_id, limit=10)
+    ltm_msgs = get_longterm_history(user_id, limit=5)
     merged_msgs = ltm_msgs + [m for m in state["messages"] if m not in ltm_msgs]
     result = llm_model.invoke({
         "system_message": system_message,
