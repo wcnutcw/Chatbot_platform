@@ -5,7 +5,7 @@ import pinecone
 
 st.title("📂 Upload your files and Ask Questions!")
 
-db_type = st.selectbox("Select Database Type", ["MongoDB","Pinecone"])
+db_type = st.selectbox("Select Database Type", ["MongoDB", "Pinecone"])
 
 session_ready = False
 show_file_uploader = True
@@ -15,18 +15,26 @@ namespace = None
 db_name = None
 collection_name = None
 
+# เปลี่ยนชื่อปุ่ม action เป็นภาษาไทย
+mongo_action_labels = {
+    "เลือกข้อมูลที่มีอยู่แล้ว": "เลือกข้อมูลที่มีอยู่แล้ว",
+    "สร้างที่จัดเก็บข้อมูลใหม่": "สร้างที่จัดเก็บข้อมูลใหม่",
+    "อัพเดตข้อมูลเพิ่มเติม": "อัพเดตข้อมูลเพิ่มเติม"
+}
+mongo_action_keys = list(mongo_action_labels.keys())
+
 if db_type == "MongoDB":
     MONGO_URI = st.text_input("MongoDB Connection URI:", value="mongodb://localhost:27017")
 
-    action = st.radio("What do you want to do?",
-                      ("เลือก Database ที่มีอยู่แล้ว", "สร้างDatabaseใหม่", "อัพเดตข้อมูลเพิ่มเติม"))
+    action = st.radio("ต้องการดำเนินการอะไร?",
+                      mongo_action_keys)
 
     try:
         client = MongoClient(MONGO_URI)
-        if action in ("Select existing", "Upsert to existing"):
+        if action in ("เลือกข้อมูลที่มีอยู่แล้ว", "อัพเดตข้อมูลเพิ่มเติม"):
             db_list = client.list_database_names()
             if db_list:
-                db_name = st.selectbox("Select MongoDB Database:", db_list)
+                db_name = st.selectbox("เลือกฐานข้อมูล MongoDB:", db_list)
             else:
                 db_name = None
 
@@ -34,14 +42,14 @@ if db_type == "MongoDB":
                 db = client[db_name]
                 collection_list = db.list_collection_names()
                 if collection_list:
-                    collection_name = st.selectbox("Select MongoDB Collection:", collection_list)
+                    collection_name = st.selectbox("เลือก Collection MongoDB:", collection_list)
                 else:
                     collection_name = None
 
-            show_file_uploader = action == "Upsert to existing"
+            show_file_uploader = action == "อัพเดตข้อมูลเพิ่มเติม"
         else:
-            db_name = st.text_input("Enter new MongoDB Database Name:")
-            collection_name = st.text_input("Enter new MongoDB Collection Name:")
+            db_name = st.text_input("กรอกชื่อฐานข้อมูล MongoDB ใหม่:")
+            collection_name = st.text_input("กรอกชื่อ Collection MongoDB ใหม่:")
             show_file_uploader = True
     except Exception as e:
         st.error(f"Cannot connect to MongoDB: {e}")
@@ -53,9 +61,15 @@ elif db_type == "Pinecone":
     PINECONE_API_KEY = st.text_input("Pinecone API Key:", type="password")
     PINECONE_ENV = st.text_input("Pinecone Environment:", value="us-west1-gcp")
 
+    pinecone_action_labels = {
+        "เลือกข้อมูลที่มีอยู่แล้ว": "เลือกข้อมูลที่มีอยู่แล้ว",
+        "สร้างที่จัดเก็บข้อมูลใหม่": "สร้างที่จัดเก็บข้อมูลใหม่"
+    }
+    pinecone_action_keys = list(pinecone_action_labels.keys())
+
     create_new_pinecone = st.radio(
-        "Do you want to create a new Pinecone index or select existing?",
-        ("Select existing", "Create new")
+        "คุณต้องการสร้าง Pinecone index ใหม่หรือเลือกที่มีอยู่แล้ว?",
+        pinecone_action_keys
     )
 
     indexes = []
@@ -67,16 +81,16 @@ elif db_type == "Pinecone":
             st.error(f"Error connecting to Pinecone: {e}")
             indexes = []
 
-    if create_new_pinecone == "Select existing":
+    if create_new_pinecone == "เลือกข้อมูลที่มีอยู่แล้ว":
         if indexes:
-            index_name = st.selectbox("Select Pinecone Index:", indexes)
+            index_name = st.selectbox("เลือก Pinecone Index:", indexes)
             show_file_uploader = False
         else:
             st.warning("No Pinecone indexes found in your account.")
             index_name = None
             show_file_uploader = True
     else:
-        index_name = st.text_input("Pinecone Index Name:")
+        index_name = st.text_input("ชื่อ Pinecone Index:")
         show_file_uploader = True
 
     namespace = st.text_input("Pinecone Namespace:", value="default-namespace")
@@ -91,8 +105,8 @@ if show_file_uploader:
 else:
     uploaded_files = None
 
-# อัปเสิร์ตเมื่อเลือก Upsert to existing
-if db_type == "MongoDB" and action == "Upsert to existing" and uploaded_files:
+# อัปเสิร์ตเมื่อเลือก "อัพเดตข้อมูลเพิ่มเติม"
+if db_type == "MongoDB" and action == "อัพเดตข้อมูลเพิ่มเติม" and uploaded_files:
     if st.button("Upload and Upsert Files"):
         multipart_files = [
             ("files", (file.name, file.getvalue())) for file in uploaded_files
@@ -128,7 +142,7 @@ if (not uploaded_files) or (not show_file_uploader):
         else:
             st.info("Please select or enter a Pinecone index name.")
 
-    elif db_type == "MongoDB" and action == "Select existing":
+    elif db_type == "MongoDB" and action == "เลือกข้อมูลที่มีอยู่แล้ว":
         if db_name and collection_name:
             if st.button("Start Query Session"):
                 data = {
@@ -144,10 +158,10 @@ if (not uploaded_files) or (not show_file_uploader):
                 else:
                     st.error(f"Failed to start session: {res.status_code} {res.text}")
         else:
-            st.info("Please select or enter MongoDB database and collection.")
+            st.info("กรุณาเลือกหรือกรอกชื่อฐานข้อมูลและคอลเลกชั่น MongoDB")
 
 # ปุ่ม Upload and Process Files เมื่อมีไฟล์อัปโหลดและ uploader โชว์
-if show_file_uploader and uploaded_files and not (db_type == "MongoDB" and action == "Upsert to existing"):
+if show_file_uploader and uploaded_files and not (db_type == "MongoDB" and action == "อัพเดตข้อมูลเพิ่มเติม"):
     if st.button("Upload and Process Files"):
         multipart_files = [
             ("files", (file.name, file.getvalue())) for file in uploaded_files
@@ -164,7 +178,7 @@ if show_file_uploader and uploaded_files and not (db_type == "MongoDB" and actio
             })
         elif db_type == "MongoDB":
             if not db_name or not collection_name:
-                st.error("Please select or enter MongoDB database and collection.")
+                st.error("กรุณาเลือกหรือกรอกชื่อฐานข้อมูลและคอลเลกชั่น MongoDB")
                 st.stop()
             data.update({
                 "db_name": db_name,
