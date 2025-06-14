@@ -64,6 +64,7 @@ client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 #TOKEN_FACEBOOK
 FACEBOOK_ACCESS_TOKEN = os.getenv("FACEBOOK_ACCESS_TOKEN")
 
+#EMAIL
 EMAIL_ADMIN = os.getenv("EMAIL_ADMIN")
 EMAIL_PASS = os.getenv("EMAIL_PASS")
 
@@ -572,7 +573,7 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
 
                     if message_id:
                             mark_message_as_processed(message_id)
-                            
+
                     ocr_texts = []
                     if attachments:
                         for attachment in attachments:
