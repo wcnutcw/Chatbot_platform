@@ -645,7 +645,7 @@ async def verify_webhook(request: Request):
 
 # SEND EMAIL
 def send_alert_email(fb_id: str, message: str, timestamp: int):
-    dt = datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
+    dt = datetime.fromtimestamp(timestamp / 1000).strftime('%d-%m-%Y %H:%M')
 
     user_name = get_facebook_user_name(fb_id, FACEBOOK_ACCESS_TOKEN)
     
@@ -665,8 +665,6 @@ def send_alert_email(fb_id: str, message: str, timestamp: int):
         smtp.starttls()
         smtp.login(EMAIL_ADMIN, EMAIL_PASS)
         smtp.send_message(email)
-
-
 
 def get_facebook_user_name(fb_id: str, access_token: str) -> str:
     try:
