@@ -5,6 +5,8 @@ current_directory = os.getcwd()
 print("Current Directory:", current_directory) 
 from dotenv import load_dotenv
 from pathlib import Path
+import smtplib
+import requests
 
 env_path = Path(current_directory).parent / 'venv' / '.env'
 print("Env Path:", env_path)  
