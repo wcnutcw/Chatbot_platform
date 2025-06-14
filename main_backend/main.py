@@ -34,6 +34,8 @@ import datetime
 import smtplib
 from email.message import EmailMessage
 from datetime import datetime
+from typing import List 
+import traceback
 
 current_directory = os.getcwd()
 print("Current Directory:", current_directory) 
@@ -82,6 +84,142 @@ api_key_aiforthai_emotional=os.getenv("api_key_aiforthai_emotional")
 
 agents = {}
 
+@app.post("/upsert")
+async def upsert_data(
+    db_type: str = Form(...),
+    db_name: str = Form(None),
+    collection_name: str = Form(None),
+    index_name: str = Form(None),
+    namespace: str = Form(None),
+    files: List[UploadFile] = File(...)
+):
+    try:
+        # ตรวจสอบว่าอัปโหลดไฟล์หรือไม่
+        if not files or len(files) == 0:
+            return JSONResponse(content={"error": "No files uploaded"}, status_code=400)
+
+        # เริ่มนับเวลา
+        start_time = time.perf_counter()
+
+        # แปลงไฟล์ที่อัปโหลด
+        result_file = await Up_File(files)  # ✅ แก้ตรงนี้
+
+        # สร้าง DataFrame จากข้อมูลที่แปลง
+        df = pd.DataFrame(result_file["dataframe"])
+
+        # ตรวจสอบว่า DataFrame ว่างหรือไม่
+        if df.empty:
+            return JSONResponse(content={"error": "Uploaded file is empty"}, status_code=400)
+
+        session_id = str(uuid.uuid4())
+
+        # wait update in the future
+        # if db_type == "Pinecone":
+        #     # ✅ เช็กว่า index_name มีค่าหรือไม่
+        #     if not index_name:
+        #         return JSONResponse(content={"error": "Missing index_name for Pinecone"}, status_code=400)
+
+        #     if index_name in pc.list_indexes().names():
+        #         pc.delete_index(index_name)
+
+        #     spec = ServerlessSpec(cloud="aws", region=PINECONE_ENV)
+        #     pc.create_index(name=index_name, dimension=1536, metric="cosine", spec=spec)
+        #     index = pc.Index(index_name)
+
+        #     embeddings = await embed_all_rows(df)  # ✅ สมมติว่าฟังก์ชันนี้แก้แล้ว ไม่เช็กผิด
+        #     vectors = [{
+        #         "id": f"vec-{i}",
+        #         "values": embeddings[i],
+        #         "metadata": df.iloc[i].to_dict()
+        #     } for i in range(len(embeddings))]
+
+        #     index.upsert(vectors=vectors, namespace=namespace)
+
+        #     # Log ลง MongoDB
+        #     log = {
+        #         "session_id": session_id,
+        #         "db_type": "Pinecone",
+        #         "files": [f.filename for f in files],
+        #         "index_name": index_name,
+        #         "namespace": namespace,
+        #         "timestamp": pd.Timestamp.now().isoformat()
+        #     }
+        #     logs_collection.insert_one(log)
+
+        #     agent = create_pandas_dataframe_agent(
+        #         ChatOpenAI(temperature=0, model="gpt-4"),
+        #         df,
+        #         verbose=True,
+        #         allow_dangerous_code=True
+        #     )
+        #     agents[session_id] = agent
+
+        if db_type == "MongoDB":
+            if not db_name or not collection_name:
+                return JSONResponse(content={"error": "Missing db_name or collection_name for MongoDB"}, status_code=400)
+
+            # เชื่อมต่อกับ MongoDB
+            file_db = mongo_client[db_name]
+            collection = file_db[collection_name]
+
+            texts = []
+            metadata_list = []
+
+            for i, row in df.iterrows():
+                metadata = row.to_dict()
+                text = "\n".join([f"{k}: {v}" for k, v in metadata.items()])
+                texts.append(text)
+                # ✅ ปรับ _id ให้ไม่ซ้ำ (ผูกกับ session_id เพื่อสะสมข้อมูล)
+                metadata_list.append((f"{session_id}-vec-{i}", metadata))
+
+            # ตรวจสอบค่า null ใน DataFrame
+            if df.isnull().all(axis=1).any():
+                df = df.fillna('')  # หรือจะใช้ dropna() ก็ได้
+
+            # สร้าง embeddings
+            embeddings = await embed_result_all(df, EMBEDDING_MODEL)
+
+            documents = []
+            for (vec_id, metadata), embedding, raw_text in zip(metadata_list, embeddings, texts):
+                documents.append({
+                    "_id": vec_id,
+                    "embedding": embedding,
+                    "metadata": metadata,
+                    "raw_text": raw_text
+                })
+
+            # อัปเดตข้อมูลลง MongoDB (ไม่ลบของเก่า ใช้ upsert)
+            for doc in documents:
+                # หาก _id ตรงกันจะ update, ถ้าไม่มีจะ insert ใหม่
+                collection.update_one({"_id": doc["_id"]}, {"$set": doc}, upsert=True)
+
+            # วัดเวลาที่ใช้ในการประมวลผล
+            end_time = time.perf_counter()
+            processing_time = end_time - start_time
+            print(f"{processing_time:.2f} seconds")
+
+            # บันทึก log การประมวลผล
+            log = {
+                "session_id": session_id,
+                "db_type": "MongoDB",
+                "files": [f.filename for f in files],
+                "db_name": db_name,
+                "collection_name": collection_name,
+                "timestamp": pd.Timestamp.now().isoformat()
+            }
+            logs_collection.insert_one(log)
+
+        else:
+            return JSONResponse(content={"error": f"Unsupported db_type: {db_type}"}, status_code=400)
+
+        return {"session_id": session_id}
+
+    except Exception as e:
+        logging.error(f"Error in /upsert endpoint: {str(e)}")
+        print(traceback.format_exc())
+        return JSONResponse(content={"error": f"Internal server error: {str(e)}"}, status_code=500)
+
+    
 @app.post("/upload")
 async def upload_files(
     files: list[UploadFile] = File(...),
