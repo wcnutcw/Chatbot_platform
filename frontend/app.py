@@ -2,6 +2,17 @@ import streamlit as st
 import requests
 from pymongo import MongoClient
 import pinecone
+import os
+from dotenv import load_dotenv
+from pathlib import Path
+import logging
+
+current_directory = os.getcwd()
+print("Current Directory:", current_directory) 
+
+env_path = Path(current_directory).parent / 'venv' / '.env'
+print("Env Path:", env_path)  
+load_dotenv()
 
 st.title("📂 Upload your files and Ask Questions!")
 
@@ -14,6 +25,10 @@ index_name = None
 namespace = None
 db_name = None
 collection_name = None
+
+#APIKEY_AIFORTHAI
+url_emotional=os.getenv("url_emotional")
+api_key_aiforthai_emotional=os.getenv("api_key_aiforthai_emotional")
 
 # เปลี่ยนชื่อปุ่ม action เป็นภาษาไทย
 mongo_action_labels = {
@@ -203,12 +218,29 @@ if show_file_uploader and uploaded_files and not (db_type == "MongoDB" and actio
 if "session_id" in st.session_state or session_ready:
     question = st.text_input("Ask a question about your data:")
 
+    # วิเคราะห์อารมณ์ 
+    max_emotion = ""
+    if question:
+            try:
+                url = f"{url_emotional}"
+                headers = {"apikey": f"{api_key_aiforthai_emotional}"}
+                params = {"text": question}
+                response = requests.get(url, params=params, headers=headers)
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("status") == "success":
+                        result = data.get("result", {})
+                        max_emotion = max(result, key=result.get)
+            except Exception as e:
+                logging.error(f"Error calling emotional API: {e}")
+
     if st.button("Ask"):
         res = requests.post(
             "http://localhost:8000/query",
             params={
                 "session_id": st.session_state.session_id,
-                "question": question
+                "question": question,
+                "emotional":max_emotion
             }
         )
         if res.status_code == 200:

@@ -569,6 +569,10 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                         continue
                     user_message = messaging_event["message"].get("text", "").strip()
                     attachments = messaging_event["message"].get("attachments", [])
+
+                    if message_id:
+                            mark_message_as_processed(message_id)
+                            
                     ocr_texts = []
                     if attachments:
                         for attachment in attachments:
@@ -588,19 +592,37 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                     if not combined_texts:
                         continue
                     final_text = " ".join(combined_texts)
+
                     # ตรวจสอบและส่ง email alert
                     if "ติดต่อเจ้าหน้าที่" in user_message:
                         background_tasks.add_task(send_alert_email, sender_id, user_message, 0)
                         await send_facebook_message(sender_id, "ทางเราได้ส่งคำขอของคุณไปหาเจ้าหน้าที่แล้ว ตอนนี้คุณมีอะไรสอบถามทางบอทก่อนหรือไม่")
                         return Response(content="ok", status_code=200)
-                    # วิเคราะห์อารมณ์ (ใส่ logic เอง ถ้าต้องการ)
+                    
+                    # วิเคราะห์อารมณ์ 
                     max_emotion = None
+                    if user_message:
+                        try:
+                            url = f"{url_emotional}"
+                            headers = {"apikey": f"{api_key_aiforthai_emotional}"}
+                            params = {"text": user_message}
+                            response = requests.get(url, params=params, headers=headers)
+                            if response.status_code == 200:
+                                data = response.json()
+                                if data.get("status") == "success":
+                                    result = data.get("result", {})
+                                    max_emotion = max(result, key=result.get)
+                        except Exception as e:
+                            logging.error(f"Error calling emotional API: {e}")
+
+
                     try:
-                        bot_response = chat_interactive(sender_id, final_text, [], max_emotion)
+                        bot_response = chat_interactive(sender_id, final_text,[], max_emotion)
                         await send_facebook_message(sender_id, bot_response)
                     except Exception as e:
                         logging.error(f"Error processing message from {sender_id}: {e}")
                         await send_facebook_message(sender_id, "ขออภัยค่ะ/ครับ ขณะนี้ไม่สามารถให้คำตอบได้")
+
         return Response(content="ok", status_code=200)
     except Exception as e:
         logging.error(f"Error in webhook handler: {e}")

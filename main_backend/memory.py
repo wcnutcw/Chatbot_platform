@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from typing_extensions import TypedDict
 from typing import List, Optional
 
+
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
 mongo_client = MongoClient(MONGO_URI)
 db = mongo_client[os.getenv('MONGO_DB', 'chat_db')]
@@ -166,13 +167,13 @@ config = {"configurable": {"thread_id": 123}}
 def user_msg(s: str) -> dict:
     return {"role": "user", "content": s}
 
-def chat_interactive(user_id: str, user_message, context, emotional):
+def chat_interactive(user_id: str, user_message,context,emotional):
     history = []
     is_first_greeting = True
     log_user_message_mongo(user_id, user_message)
     history.append(user_msg(user_message))
     input_state = {"messages": history, "user_id": user_id}
-    response_state, _ = ChatNode(input_state, context, emotional, is_first_greeting)
+    response_state, _ = ChatNode(input_state,context,emotional, is_first_greeting)
     is_first_greeting = False
     assistant_msgs = [
         msg for msg in response_state["messages"]
