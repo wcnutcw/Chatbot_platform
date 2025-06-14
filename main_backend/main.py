@@ -618,7 +618,7 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
 
 
                     try:
-                        bot_response =  process_chatbot_query(sender_id, final_text_user, max_emotion)
+                        bot_response = await process_chatbot_query(sender_id, final_text_user, max_emotion)
                         await send_facebook_message(sender_id, bot_response)
                     except Exception as e:
                         logging.error(f"Error processing message from {sender_id}: {e}")
