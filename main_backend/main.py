@@ -396,34 +396,7 @@ async def process_chatbot_query(sender_id: str, user_message: str, emotional:str
         logging.error(f"Error in chatbot processing: {e}")
         return "ขออภัย เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง"
 
-from sentence_transformers import SentenceTransformer, util
 
-# โหลด model (ทำครั้งเดียวตอน start app)
-model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-
-# กำหนดประโยคตัวอย่างที่ต้องการตรวจจับความหมาย
-target_phrases = [
-    "ติดต่อเจ้าหน้าที่",
-    "แจ้งเจ้าหน้าที่",
-    "ขอคุยกับเจ้าหน้าที่",
-    "อยากคุยกับแอดมิน",
-    "ขอความช่วยเหลือจากเจ้าหน้าที่",
-    "แอดมินอยู่ไหม",
-    "รบกวนติดต่อเจ้าหน้าที่"
-]
-
-# เข้ารหัส (embedding) ของประโยคเป้าหมายทั้งหมดครั้งเดียว
-target_embeddings = model.encode(target_phrases, convert_to_tensor=True)
-
-# ฟังก์ชันตรวจสอบข้อความว่าคล้ายกับกลุ่ม target หรือไม่
-def is_similar_to_contact_staff(message_text, threshold=0.7):
-    # เข้ารหัสข้อความที่ผู้ใช้ส่งมา
-    input_embedding = model.encode(message_text, convert_to_tensor=True)
-    # คำนวณความคล้ายกัน (cosine similarity) กับทุก target
-    cosine_scores = util.pytorch_cos_sim(input_embedding, target_embeddings)
-    # เอาคะแนนสูงสุดในกลุ่มมาเช็ค
-    max_score = cosine_scores.max().item()
-    return max_score >= threshold 
 
 # สร้าง set เก็บ message_id ที่ประมวลผลแล้ว (ใช้ในหน่วยความจำเท่านั้น)
 processed_message_ids = set()
