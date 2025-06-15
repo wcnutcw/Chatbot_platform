@@ -144,6 +144,9 @@ def ChatNode(state: dict, context, emotional: str, is_first_greeting: bool = Fal
     ltm_msgs = get_longterm_history(user_id, limit=3)  # ดึงประวัติการสนทนาล่าสุด 3 ข้อความ
     previous_context = "\n".join([msg["content"] for msg in ltm_msgs])
 
+    # import json
+    # with open('data.json', 'r', encoding='utf-8') as f:
+    #     data_json = json.load(f)
 
     # สร้าง system_message โดยใช้ข้อมูลจาก prompt
     from Prompt import base_system
