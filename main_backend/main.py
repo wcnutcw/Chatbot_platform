@@ -548,6 +548,51 @@ def mark_message_as_processed(message_id):
     """บันทึก message_id ว่าประมวลผลแล้ว"""
     processed_message_ids.add(message_id)
     
+def remove_middle_spaces(text):
+# ถ้าทั้งหมดเป็นตัวอักษรเว้นวรรค หรือ ตัวอักษรกับคำ (ภาษาไทย/อังกฤษ)
+    return text.replace(" ", "")
+
+from typing import Dict
+user_buffers: Dict[str, Dict] = {}    # user_id: {"messages": [], "task": asyncio.Task}
+async def handle_user_buffer(user_id: str, sender_id: str, background_tasks: BackgroundTasks):
+    await asyncio.sleep(5)  # รอ 5 วิ
+    buffer = user_buffers.get(user_id)
+    if not buffer or not buffer["messages"]:
+        return
+    combined_texts = []
+    for msg in buffer["messages"]:
+        if isinstance(msg, list):
+            combined_texts.extend(msg)
+        else:
+            combined_texts.append(msg)
+    final_text_user = "\n".join(combined_texts)
+
+    # วิเคราะห์อารมณ์ (เลือกข้อความแรก)
+    max_emotion = None
+    try:
+        first_message = combined_texts[0] if combined_texts else ""
+        if first_message:
+            url = f"{url_emotional}"
+            headers = {"apikey": f"{api_key_aiforthai_emotional}"}
+            params = {"text": first_message}
+            response = requests.get(url, params=params, headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status") == "success":
+                    result = data.get("result", {})
+                    max_emotion = max(result, key=result.get)
+    except Exception as e:
+        logging.error(f"Error calling emotional API: {e}")
+
+    try:
+        bot_response = await process_chatbot_query(sender_id, final_text_user, max_emotion)
+        await send_facebook_message(sender_id, bot_response)
+    except Exception as e:
+        logging.error(f"Error processing message from {sender_id}: {e}")
+        await send_facebook_message(sender_id, "ขออภัยค่ะ/ครับ ขณะนี้ไม่สามารถให้คำตอบได้")
+    # ล้าง buffer user
+    user_buffers.pop(user_id, None)
+
 # Webhook สำหรับรับข้อความจาก Facebook
 from fastapi import Request, Response
 import logging
@@ -565,64 +610,59 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                     if messaging_event["message"].get("is_echo"):
                         continue
                     sender_id = messaging_event["sender"]["id"]
+                    user_id = sender_id   # หรือปรับเป็น user_id ที่เหมาะสมกับระบบคุณ
                     message_id = messaging_event["message"].get("mid")
                     if message_id and is_message_processed(message_id):
                         continue
                     user_message = messaging_event["message"].get("text", "").strip()
                     attachments = messaging_event["message"].get("attachments", [])
-
+                    user_message = remove_middle_spaces(user_message)
                     if message_id:
-                            mark_message_as_processed(message_id)
+                        mark_message_as_processed(message_id)
 
-                    ocr_texts = []
+                    # เตรียม OCR tasks ถ้ามีรูป
+                    ocr_tasks = []
                     if attachments:
                         for attachment in attachments:
                             if attachment.get("type") == "image":
                                 image_url = attachment["payload"].get("url")
                                 if image_url:
-                                    try:
-                                        ocr_text = await process_image_and_ocr_then_chat(image_url)
-                                        if ocr_text:
-                                            ocr_texts.append(ocr_text)
-                                    except Exception as e:
-                                        logging.error(f"Error OCR image from {sender_id}: {e}")
-                    combined_texts = []
-                    if user_message:
-                        combined_texts.append(user_message)
-                    combined_texts.extend(ocr_texts)
-                    if not combined_texts:
-                        continue
-                    final_text_user = " ".join(combined_texts)
+                                    ocr_tasks.append(process_image_and_ocr_then_chat(image_url))
 
-                    # ตรวจสอบและส่ง email alert
+                    ocr_texts = []
+                    if ocr_tasks:
+                        try:
+                            ocr_texts = await asyncio.wait_for(
+                                asyncio.gather(*ocr_tasks),
+                                timeout=5.0
+                            )
+                        except asyncio.TimeoutError:
+                            pass
+
+                    # --- ใส่ buffer ---
+                    if user_id not in user_buffers:
+                        user_buffers[user_id] = {"messages": [], "task": None}
+                    if user_message:
+                        user_buffers[user_id]["messages"].append(user_message)
+                    if ocr_texts:
+                        user_buffers[user_id]["messages"].extend(ocr_texts)
+
+                    # ถ้ามีข้อความ "ติดต่อเจ้าหน้าที่" ตอบทันทีไม่ต้องรอ
                     if "ติดต่อเจ้าหน้าที่" in user_message:
                         background_tasks.add_task(send_alert_email, sender_id, user_message, 0)
                         await send_facebook_message(sender_id, "ทางเราได้ส่งคำขอของคุณไปหาเจ้าหน้าที่แล้ว ตอนนี้คุณมีอะไรสอบถามทางบอทก่อนหรือไม่")
+                        # เคลียร์ buffer นี้
+                        user_buffers.pop(user_id, None)
                         return Response(content="ok", status_code=200)
-                    
-                    # วิเคราะห์อารมณ์ 
-                    max_emotion = None
-                    if user_message:
-                        try:
-                            url = f"{url_emotional}"
-                            headers = {"apikey": f"{api_key_aiforthai_emotional}"}
-                            params = {"text": user_message}
-                            response = requests.get(url, params=params, headers=headers)
-                            if response.status_code == 200:
-                                data = response.json()
-                                if data.get("status") == "success":
-                                    result = data.get("result", {})
-                                    max_emotion = max(result, key=result.get)
-                        except Exception as e:
-                            logging.error(f"Error calling emotional API: {e}")
 
-
-                    try:
-                        bot_response = await process_chatbot_query(sender_id, final_text_user, max_emotion)
-                        await send_facebook_message(sender_id, bot_response)
-                    except Exception as e:
-                        logging.error(f"Error processing message from {sender_id}: {e}")
-                        await send_facebook_message(sender_id, "ขออภัยค่ะ/ครับ ขณะนี้ไม่สามารถให้คำตอบได้")
+                    # -- ตั้ง/รีเซต timer task สำหรับ user นี้ --
+                    old_task = user_buffers[user_id].get("task")
+                    if old_task:
+                        old_task.cancel()
+                    task = asyncio.create_task(
+                        handle_user_buffer(user_id, sender_id, background_tasks)
+                    )
+                    user_buffers[user_id]["task"] = task
 
         return Response(content="ok", status_code=200)
     except Exception as e:
