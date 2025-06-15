@@ -221,6 +221,14 @@ async def upsert_data(
         print(traceback.format_exc())
         return JSONResponse(content={"error": f"Internal server error: {str(e)}"}, status_code=500)
 
+def clean_text(text):
+    if not isinstance(text, str):
+        text = str(text)
+    return (text.encode("utf-8", "ignore")
+                .decode("utf-8")
+                .replace('\uf70a', '')
+                .replace('\uf70b', '')
+                .replace('\uf70e', ''))
     
 @app.post("/upload")
 async def upload_files(
@@ -242,10 +250,16 @@ async def upload_files(
         # แปลงไฟล์ที่อัปโหลด
         result_file = await Up_File(files)
 
-        # สร้าง DataFrame จากข้อมูลที่แปลง
-        df = pd.DataFrame(result_file["dataframe"])
+        # --- สร้าง DataFrame จาก result_file โดยรองรับทุกกรณี ---
+        if "dataframe" in result_file and result_file["dataframe"]:
+            df = pd.DataFrame(result_file["dataframe"])
+        elif "pages" in result_file and result_file["pages"]:
+            df = pd.DataFrame({"page": result_file["pages"]})
+        elif "paragraphs" in result_file and result_file["paragraphs"]:
+            df = pd.DataFrame({"paragraph": result_file["paragraphs"]})
+        else:
+            return JSONResponse(content={"error": "No valid text data found"}, status_code=400)
 
-        # ตรวจสอบว่า DataFrame ว่างหรือไม่
         if df.empty:
             return JSONResponse(content={"error": "Uploaded file is empty"}, status_code=400)
 
@@ -296,38 +310,41 @@ async def upload_files(
             if not db_name or not collection_name:
                 return JSONResponse(content={"error": "Missing db_name or collection_name for MongoDB"}, status_code=400)
 
-            # เชื่อมต่อกับ MongoDB
             file_db = mongo_client[db_name]
             collection = file_db[collection_name]
 
-            texts = []
+            # เตรียมข้อมูลหลัก (metadata อ้างอิง row เดิมไว้ก่อน)
             metadata_list = []
-
             for i, row in df.iterrows():
                 metadata = row.to_dict()
-                text = "\n".join([f"{k}: {v}" for k, v in metadata.items()])
-                texts.append(text)
                 metadata_list.append((f"vec-{i}", metadata))
 
-            # ตรวจสอบค่า null ใน DataFrame
-            if df.isnull().all(axis=1).any():
-                df = df.fillna('')  # หรือจะใช้ dropna() ก็ได้
+            # สร้าง embeddings และได้ text chunk ทั้งหมด
+            embeddings, chunk_text_list = await embed_result_all(df, EMBEDDING_MODEL)
 
-            # สร้าง embeddings
-            embeddings = await embed_result_all(df, EMBEDDING_MODEL)
-            
+            # (กรณีต้องการ clean database เดิมก่อน)
             collection.delete_many({})  
+
+            # ตรวจสอบจำนวน chunk และ embedding ว่าตรงกันจริง
+            assert len(embeddings) == len(chunk_text_list), "Embeddings and chunk_text_list length mismatch!"
+
             documents = []
-            for (vec_id, metadata), embedding, raw_text in zip(metadata_list, embeddings, texts):
+            for idx, (embedding, raw_text) in enumerate(zip(embeddings, chunk_text_list)):
+                embedding_float = [float(x) for x in embedding]
+                clean_raw = clean_text(raw_text)
+                # กำหนด id/metadata แบบ simple: เอาจาก chunk index และ metadata row ต้นทาง
+                row_idx = idx if idx < len(metadata_list) else 0  # เผื่อกรณี chunk มากกว่า row
+                vec_id, metadata = metadata_list[row_idx]
                 documents.append({
-                    "_id": vec_id,
-                    "embedding": embedding,
+                    "_id": f"{vec_id}_chunk{idx}",
+                    "embedding": embedding_float,
                     "metadata": metadata,
-                    "raw_text": raw_text
+                    "raw_text": clean_raw
                 })
 
             # เพิ่มข้อมูลลง MongoDB
-            collection.insert_many(documents)
+            if documents:
+                collection.insert_many(documents)
 
             # วัดเวลาที่ใช้ในการประมวลผล
             end_time = time.perf_counter()
