@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from typing_extensions import TypedDict
 from typing import List, Optional
 
+
 # --- .env ---
 load_dotenv()
 current_directory = os.getcwd()
