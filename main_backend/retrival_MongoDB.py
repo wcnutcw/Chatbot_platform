@@ -4,21 +4,31 @@ from sklearn.decomposition import PCA
 
 openai_tokenizer = tiktoken.encoding_for_model("text-embedding-3-small")
 
-def reduce_vector_dimension(vec, target_dim):
+def reduce_vector_dimension(vec, target_dim, pca_energy=None):
     if vec.ndim == 1:
         vec = vec.reshape(1, -1)
     current_dim = vec.shape[1]
     if current_dim == target_dim:
         return vec.flatten()
     if vec.shape[0] == 1:
+        # Single vector: slice หรือ padding
         if current_dim > target_dim:
             reduced = vec[:, :target_dim]
         else:
             pad_width = target_dim - current_dim
             reduced = np.pad(vec, ((0, 0), (0, pad_width)), mode='constant')
     else:
-        pca = PCA(n_components=target_dim)
+        if pca_energy is not None and 0 < pca_energy < 1:
+            pca = PCA(n_components=pca_energy, svd_solver='full')
+        else:
+            pca = PCA(n_components=target_dim)
         reduced = pca.fit_transform(vec)
+        # Ensure correct dim
+        if reduced.shape[1] > target_dim:
+            reduced = reduced[:, :target_dim]
+        elif reduced.shape[1] < target_dim:
+            pad_width = target_dim - reduced.shape[1]
+            reduced = np.pad(reduced, ((0,0),(0,pad_width)), mode='constant')
     return reduced.flatten()
 
 def cosine_similarity_2(vec1, vec2):
