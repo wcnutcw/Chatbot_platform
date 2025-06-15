@@ -555,7 +555,7 @@ def remove_middle_spaces(text):
 from typing import Dict
 user_buffers: Dict[str, Dict] = {}    # user_id: {"messages": [], "task": asyncio.Task}
 async def handle_user_buffer(user_id: str, sender_id: str, background_tasks: BackgroundTasks):
-    await asyncio.sleep(5)  # รอ 5 วิ
+    await asyncio.sleep(6)  # รอ 6 วิ
     buffer = user_buffers.get(user_id)
     if not buffer or not buffer["messages"]:
         return
