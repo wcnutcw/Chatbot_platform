@@ -97,5 +97,8 @@ HF_TOKEN=your_huggingface_token</pre>
 ## วิธี Run DOCKER 
 ```docker run -d -p 5000:5000 -e OPENAI_API_KEY="your-openai-api-key-here" chatbot_ai_platform```
 
+## ติดตั้ง model PythaiNLP ด้วย ของ โมเดลภาษาอังกฤษ 
+```python -m spacy download en_core_web_sm```
+
 ## 🙋‍♂️ ติดต่อ
 หากพบปัญหาหรือข้อเสนอแนะ กรุณาเปิด Issue หรือ pull request

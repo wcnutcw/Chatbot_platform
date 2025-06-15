@@ -9,7 +9,6 @@ def count_tokens(text: str, model="gpt-4o-mini") -> int:
     return len(encoding.encode(text))
 
 def extractive_summarize(text: str, keywords: List[str]) -> str:
-    # เลือกเฉพาะบรรทัดที่มี keyword
     if not keywords:
         return text
     lines = text.splitlines()
@@ -19,6 +18,8 @@ def extractive_summarize(text: str, keywords: List[str]) -> str:
             if kw.lower() in line.lower():
                 selected.append(line)
                 break
+    if not selected:
+        return text  # <--- fallback
     return "\n".join(selected)
 
 def reduce_context(

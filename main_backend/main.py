@@ -527,11 +527,12 @@ async def process_chatbot_query(sender_id: str, user_message: str, emotional:str
             file_db = mongo_client[db_name]
             collection = file_db[collection_name]
             
-            
+            from stopword import extract_keywords_from_query
+            keywords = extract_keywords_from_query(user_message)
 
             context_bf = await retrieve_context_from_mongodb(collection, user_message)
             num_tokens_context = count_tokens(context_bf, model="gpt-4o-mini")
-            context = reduce_context(context_bf, num_tokens_context)
+            context = reduce_context(context_bf, num_tokens_context,keywords)
         else:
             return "ขออภัย เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง"
 
