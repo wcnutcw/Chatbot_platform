@@ -86,14 +86,21 @@ api_key_aiforthai_emotional=os.getenv("api_key_aiforthai_emotional")
 
 agents = {}
 
+def clean_text(text):
+    if not isinstance(text, str):
+        text = str(text)
+    return (text.encode("utf-8", "ignore")
+                .decode("utf-8")
+                .replace('\uf70a', '')
+                .replace('\uf70b', '')
+                .replace('\uf70e', ''))
+    
 @app.post("/upsert")
 async def upsert_data(
     db_type: str = Form(...),
     db_name: str = Form(None),
     collection_name: str = Form(None),
-    index_name: str = Form(None),
-    namespace: str = Form(None),
-    files: List[UploadFile] = File(...)
+    files: list[UploadFile] = File(...)
 ):
     try:
         # ตรวจสอบว่าอัปโหลดไฟล์หรือไม่
@@ -104,103 +111,64 @@ async def upsert_data(
         start_time = time.perf_counter()
 
         # แปลงไฟล์ที่อัปโหลด
-        result_file = await Up_File(files)  # ✅ แก้ตรงนี้
+        result_file = await Up_File(files)
 
-        # สร้าง DataFrame จากข้อมูลที่แปลง
-        df = pd.DataFrame(result_file["dataframe"])
+        # --- สร้าง DataFrame จาก result_file โดยรองรับทุกกรณี ---
+        if "dataframe" in result_file and result_file["dataframe"]:
+            df = pd.DataFrame(result_file["dataframe"])
+        elif "pages" in result_file and result_file["pages"]:
+            df = pd.DataFrame({"page": result_file["pages"]})
+        elif "paragraphs" in result_file and result_file["paragraphs"]:
+            df = pd.DataFrame({"paragraph": result_file["paragraphs"]})
+        else:
+            return JSONResponse(content={"error": "No valid text data found"}, status_code=400)
 
-        # ตรวจสอบว่า DataFrame ว่างหรือไม่
         if df.empty:
             return JSONResponse(content={"error": "Uploaded file is empty"}, status_code=400)
 
         session_id = str(uuid.uuid4())
 
-        # wait update in the future
-        # if db_type == "Pinecone":
-        #     # ✅ เช็กว่า index_name มีค่าหรือไม่
-        #     if not index_name:
-        #         return JSONResponse(content={"error": "Missing index_name for Pinecone"}, status_code=400)
-
-        #     if index_name in pc.list_indexes().names():
-        #         pc.delete_index(index_name)
-
-        #     spec = ServerlessSpec(cloud="aws", region=PINECONE_ENV)
-        #     pc.create_index(name=index_name, dimension=1536, metric="cosine", spec=spec)
-        #     index = pc.Index(index_name)
-
-        #     embeddings = await embed_all_rows(df)  # ✅ สมมติว่าฟังก์ชันนี้แก้แล้ว ไม่เช็กผิด
-        #     vectors = [{
-        #         "id": f"vec-{i}",
-        #         "values": embeddings[i],
-        #         "metadata": df.iloc[i].to_dict()
-        #     } for i in range(len(embeddings))]
-
-        #     index.upsert(vectors=vectors, namespace=namespace)
-
-        #     # Log ลง MongoDB
-        #     log = {
-        #         "session_id": session_id,
-        #         "db_type": "Pinecone",
-        #         "files": [f.filename for f in files],
-        #         "index_name": index_name,
-        #         "namespace": namespace,
-        #         "timestamp": pd.Timestamp.now().isoformat()
-        #     }
-        #     logs_collection.insert_one(log)
-
-        #     agent = create_pandas_dataframe_agent(
-        #         ChatOpenAI(temperature=0, model="gpt-4"),
-        #         df,
-        #         verbose=True,
-        #         allow_dangerous_code=True
-        #     )
-        #     agents[session_id] = agent
-
         if db_type == "MongoDB":
             if not db_name or not collection_name:
                 return JSONResponse(content={"error": "Missing db_name or collection_name for MongoDB"}, status_code=400)
 
-            # เชื่อมต่อกับ MongoDB
             file_db = mongo_client[db_name]
             collection = file_db[collection_name]
 
-            texts = []
+            # เตรียม metadata อ้างอิง row
             metadata_list = []
-
             for i, row in df.iterrows():
                 metadata = row.to_dict()
-                text = "\n".join([f"{k}: {v}" for k, v in metadata.items()])
-                texts.append(text)
-                # ✅ ปรับ _id ให้ไม่ซ้ำ (ผูกกับ session_id เพื่อสะสมข้อมูล)
-                metadata_list.append((f"{session_id}-vec-{i}", metadata))
+                metadata_list.append((f"vec-{i}", metadata))
 
-            # ตรวจสอบค่า null ใน DataFrame
-            if df.isnull().all(axis=1).any():
-                df = df.fillna('')  # หรือจะใช้ dropna() ก็ได้
+            # สร้าง embeddings และ text chunk
+            embeddings, chunk_text_list = await embed_result_all(df, EMBEDDING_MODEL)
 
-            # สร้าง embeddings
-            embeddings = await embed_result_all(df, EMBEDDING_MODEL)
+            assert len(embeddings) == len(chunk_text_list), "Embeddings and chunk_text_list length mismatch!"
 
             documents = []
-            for (vec_id, metadata), embedding, raw_text in zip(metadata_list, embeddings, texts):
+            for idx, (embedding, raw_text) in enumerate(zip(embeddings, chunk_text_list)):
+                embedding_float = [float(x) for x in embedding]
+                clean_raw = clean_text(raw_text)
+                row_idx = idx if idx < len(metadata_list) else 0
+                vec_id, metadata = metadata_list[row_idx]
                 documents.append({
-                    "_id": vec_id,
-                    "embedding": embedding,
+                    "_id": f"{session_id}-{vec_id}_chunk{idx}",  # unique id ต่อ session
+                    "embedding": embedding_float,
                     "metadata": metadata,
-                    "raw_text": raw_text
+                    "raw_text": clean_raw
                 })
 
-            # อัปเดตข้อมูลลง MongoDB (ไม่ลบของเก่า ใช้ upsert)
+            # upsert: insert ถ้าใหม่, update ถ้าซ้ำ
             for doc in documents:
-                # หาก _id ตรงกันจะ update, ถ้าไม่มีจะ insert ใหม่
                 collection.update_one({"_id": doc["_id"]}, {"$set": doc}, upsert=True)
 
-            # วัดเวลาที่ใช้ในการประมวลผล
+            # วัดเวลา
             end_time = time.perf_counter()
             processing_time = end_time - start_time
             print(f"{processing_time:.2f} seconds")
 
-            # บันทึก log การประมวลผล
+            # log
             log = {
                 "session_id": session_id,
                 "db_type": "MongoDB",
@@ -218,18 +186,10 @@ async def upsert_data(
 
     except Exception as e:
         logging.error(f"Error in /upsert endpoint: {str(e)}")
+        import traceback
         print(traceback.format_exc())
         return JSONResponse(content={"error": f"Internal server error: {str(e)}"}, status_code=500)
 
-def clean_text(text):
-    if not isinstance(text, str):
-        text = str(text)
-    return (text.encode("utf-8", "ignore")
-                .decode("utf-8")
-                .replace('\uf70a', '')
-                .replace('\uf70b', '')
-                .replace('\uf70e', ''))
-    
 @app.post("/upload")
 async def upload_files(
     files: list[UploadFile] = File(...),
