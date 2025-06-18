@@ -1,6 +1,7 @@
-import datetime
+from datetime import datetime
 from email.message import EmailMessage
 import os
+
 current_directory = os.getcwd()
 print("Current Directory:", current_directory) 
 from dotenv import load_dotenv

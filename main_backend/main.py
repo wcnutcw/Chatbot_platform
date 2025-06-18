@@ -37,6 +37,7 @@ from email.message import EmailMessage
 from datetime import datetime
 from typing import List 
 import traceback
+from similar_word_send_admin import is_similar_to_contact_staff
 
 current_directory = os.getcwd()
 print("Current Directory:", current_directory) 
@@ -629,7 +630,8 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                         user_buffers[user_id]["messages"].extend(ocr_texts)
 
                     # ถ้ามีข้อความ "ติดต่อเจ้าหน้าที่" ตอบทันทีไม่ต้องรอ
-                    if "ติดต่อเจ้าหน้าที่" in user_message:
+                    # if "ติดต่อเจ้าหน้าที่" in user_message:
+                    if is_similar_to_contact_staff(user_message):
                         background_tasks.add_task(send_alert_email, sender_id, user_message, 0)
                         await send_facebook_message(sender_id, "ทางเราได้ส่งคำขอของคุณไปหาเจ้าหน้าที่แล้ว ตอนนี้คุณมีอะไรสอบถามทางบอทก่อนหรือไม่")
                         # เคลียร์ buffer นี้
