@@ -49,7 +49,7 @@ def base_system(question, context_p, emotional_p, previous_context, is_first_tur
     - ใช้สรรพนาม "คุณ" และเสียงทางการแบบเจ้าหน้าที่มหาวิทยาลัย
     - ปิดท้ายด้วย "หากต้องการติดต่อเจ้าหน้าที่ให้พิมพ์ว่า 'ติดต่อเจ้าหน้าที่' พร้อมรายละเอียดและอีเมล"
     
-    หากไม่มีข้อมูลตอบได้จาก context ให้ตอบว่า:
+    หากไม่มีข้อมูลตอบได้จาก"{context}}" ให้ตอบว่า:
     "ขออภัยครับ ทางบอทยังไม่มีข้อมูลสำหรับคำถามนี้ หากต้องการติดต่อเจ้าหน้าที่ พิมพ์ว่า 'ติดต่อเจ้าหน้าที่' พร้อมอีเมลครับ"
 
     ตัวอย่าง:
@@ -65,15 +65,6 @@ def base_system(question, context_p, emotional_p, previous_context, is_first_tur
         emotional=emotional_p,
         previous_context=previous_context,
         is_first_turn=is_first_turn
-    )
-    return final_prompt
-
-    final_prompt = base_prompt.format(
-        greeting=greeting,
-        question=question,
-        context=context_p,
-        emotional=emotional_p,
-        previous_context=previous_context
     )
     return final_prompt
 
