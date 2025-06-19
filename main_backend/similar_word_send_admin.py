@@ -8,7 +8,7 @@ target_phrases = [
 ]
 target_embeddings = model.encode(target_phrases, convert_to_tensor=True)
 
-def is_similar_to_contact_staff(message_text, threshold=0):
+def is_similar_to_contact_staff(message_text, threshold=0.6):
     input_embedding = model.encode(message_text, convert_to_tensor=True)
     cosine_scores = util.pytorch_cos_sim(input_embedding, target_embeddings)
     max_score = cosine_scores.max().item()

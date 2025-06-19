@@ -40,4 +40,6 @@ def reduce_context(
     tokens = encoding.encode(text)
     if len(tokens) <= max_tokens:
         return text
-    return encoding.decode(tokens[:max_tokens])
+    encoding=encoding.decode(tokens[:max_tokens])
+    print(f"ข้อความที่ลดแล้ว : {encoding}")
+    return encoding

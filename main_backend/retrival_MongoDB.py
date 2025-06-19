@@ -56,7 +56,7 @@ def reduce_token_with_openai(text, max_tokens=512):
         tokens = tokens[:max_tokens]
     return openai_tokenizer.decode(tokens)
 
-async def retrieve_context_from_mongodb(collection, question: str, top_k: int = 5, embedding_model="text-embedding-3-small"):
+async def retrieve_context_from_mongodb(collection, question: str, top_k: int = 3, embedding_model="text-embedding-3-small"):
     from openai import AsyncOpenAI
     client = AsyncOpenAI()
     response = await client.embeddings.create(model=embedding_model, input=[question])
@@ -77,4 +77,5 @@ async def retrieve_context_from_mongodb(collection, question: str, top_k: int = 
         reduced = reduce_token_with_openai(doc.get("raw_text", ""))
         print(f"Top doc (score={score:.4f}): {reduced[:100]} ...")
         reduced_texts.append(reduced)
+    # print(f"นี้คือช้อความที่ลดแล้ว : {reduced_texts}")
     return "\n".join(reduced_texts)

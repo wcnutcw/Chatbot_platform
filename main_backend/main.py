@@ -494,6 +494,7 @@ async def process_chatbot_query(sender_id: str, user_message: str, emotional:str
             context_bf = await retrieve_context_from_mongodb(collection, user_message)
             num_tokens_context = count_tokens(context_bf, model="gpt-4o-mini")
             context = reduce_context(context_bf, num_tokens_context,keywords)
+            # print(f"context : {context}")
         else:
             return "ขออภัย เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง"
 
@@ -633,7 +634,8 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                     # if "ติดต่อเจ้าหน้าที่" in user_message:
                     if is_similar_to_contact_staff(user_message):
                         background_tasks.add_task(send_alert_email, sender_id, user_message, 0)
-                        await send_facebook_message(sender_id, "ทางเราได้ส่งคำขอของคุณไปหาเจ้าหน้าที่แล้ว ตอนนี้คุณมีอะไรสอบถามทางบอทก่อนหรือไม่")
+                        await send_facebook_message(sender_id, 
+                                                "คำขอของท่านได้ถูกส่งไปยังเจ้าหน้าที่เรียบร้อยแล้ว หากคุณยังไม่ได้ระบุรายละเอียดกรุณาพิมพ์คำว่า 'ติดต่อเจ้าหน้าที่' พร้อมข้อมูลและอีเมลที่คุณต้องการให้ติดต่อกลับครับ ขณะนี้คุณมีคำถามเพิ่มเติมที่ต้องการสอบถามกับบอทหรือไม่ครับ?")
                         # เคลียร์ buffer นี้
                         user_buffers.pop(user_id, None)
                         return Response(content="ok", status_code=200)
