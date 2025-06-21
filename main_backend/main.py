@@ -585,7 +585,8 @@ import logging
 async def receive_message(request: Request, background_tasks: BackgroundTasks):
     try:
         data = await request.json()
-        print("DEBUG: Received Event:", data)
+        logging.debug(f"Received Event: {data}")  # เพิ่มการตรวจสอบข้อมูลที่ได้รับ
+
         if "entry" in data:
             for entry in data["entry"]:
                 for messaging_event in entry.get("messaging", []):
@@ -594,13 +595,16 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                     if messaging_event["message"].get("is_echo"):
                         continue
                     sender_id = messaging_event["sender"]["id"]
-                    user_id = sender_id   # หรือปรับเป็น user_id ที่เหมาะสมกับระบบคุณ
+                    user_id = sender_id
                     message_id = messaging_event["message"].get("mid")
+                    
                     if message_id and is_message_processed(message_id):
                         continue
+                    
                     user_message = messaging_event["message"].get("text", "").strip()
                     attachments = messaging_event["message"].get("attachments", [])
                     user_message = remove_middle_spaces(user_message)
+                    
                     if message_id:
                         mark_message_as_processed(message_id)
 
@@ -611,17 +615,21 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                             if attachment.get("type") == "image":
                                 image_url = attachment["payload"].get("url")
                                 if image_url:
+                                    logging.debug(f"Found image attachment, processing OCR: {image_url}")  # ตรวจสอบว่ามีภาพที่ถูกส่ง
                                     ocr_tasks.append(process_image_and_ocr_then_chat(image_url))
 
                     ocr_texts = []
                     if ocr_tasks:
                         try:
+                            logging.debug("Starting OCR processing...")
                             ocr_texts = await asyncio.wait_for(
                                 asyncio.gather(*ocr_tasks),
-                                timeout=5.0
+                                timeout=10.0
                             )
+                            logging.debug(f"OCR result: {ocr_texts}")
                         except asyncio.TimeoutError:
-                            pass
+                            logging.error("OCR processing timed out.")
+                            ocr_texts = []  # กรณี OCR timeout ให้ตรวจสอบว่าเป็นค่าว่าง
 
                     # --- ใส่ buffer ---
                     if user_id not in user_buffers:
@@ -629,14 +637,15 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                     if user_message:
                         user_buffers[user_id]["messages"].append(user_message)
                     if ocr_texts:
+                        logging.debug(f"Adding OCR texts to buffer: {ocr_texts}")
                         user_buffers[user_id]["messages"].extend(ocr_texts)
 
                     # ถ้ามีข้อความ "ติดต่อเจ้าหน้าที่" ตอบทันทีไม่ต้องรอ
-                    # if "ติดต่อเจ้าหน้าที่" in user_message:
                     if is_similar_to_contact_staff(user_message):
+                        logging.debug(f"Detected 'contact staff' message from user: {user_message}")
                         background_tasks.add_task(send_alert_email, sender_id, user_message, 0)
                         await send_facebook_message(sender_id, 
-                                                "คำขอของท่านได้ถูกส่งไปยังเจ้าหน้าที่เรียบร้อยแล้ว หากคุณยังไม่ได้ระบุรายละเอียดกรุณาพิมพ์คำว่า 'ติดต่อเจ้าหน้าที่' พร้อมข้อมูลและอีเมลที่คุณต้องการให้ติดต่อกลับครับ ขณะนี้คุณมีคำถามเพิ่มเติมที่ต้องการสอบถามกับบอทหรือไม่ครับ?")
+                                                    "คำขอของท่านได้ถูกส่งไปยังเจ้าหน้าที่เรียบร้อยแล้ว หากคุณยังไม่ได้ระบุรายละเอียดกรุณาพิมพ์คำว่า 'ติดต่อเจ้าหน้าที่' พร้อมข้อมูลและอีเมลที่คุณต้องการให้ติดต่อกลับครับ ขณะนี้คุณมีคำถามเพิ่มเติมที่ต้องการสอบถามกับบอทหรือไม่ครับ?")
                         # เคลียร์ buffer นี้
                         user_buffers.pop(user_id, None)
                         return Response(content="ok", status_code=200)
@@ -651,6 +660,7 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                     user_buffers[user_id]["task"] = task
 
         return Response(content="ok", status_code=200)
+
     except Exception as e:
         logging.error(f"Error in webhook handler: {e}")
         return Response(content="error", status_code=500)
