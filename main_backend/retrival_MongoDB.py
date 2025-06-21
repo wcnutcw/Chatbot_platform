@@ -56,7 +56,7 @@ def reduce_token_with_openai(text, max_tokens=512):
         tokens = tokens[:max_tokens]
     return openai_tokenizer.decode(tokens)
 
-async def retrieve_context_from_mongodb(collection, question: str, top_k: int = 3, embedding_model="text-embedding-3-small"):
+async def retrieve_context_from_mongodb(collection, question: str, top_k: int = 5, embedding_model="text-embedding-3-small"):
     from openai import AsyncOpenAI
     client = AsyncOpenAI()
     response = await client.embeddings.create(model=embedding_model, input=[question])

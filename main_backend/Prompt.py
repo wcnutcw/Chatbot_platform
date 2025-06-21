@@ -54,7 +54,6 @@ def summarize_answer(question, context_p, previous_context):
     - ทำการคัดกรองข้อมูลที่สำคัญจาก {context} โดยเน้นข้อมูลที่สำคัญที่สุด
     - คัดกรองคำตอบที่กระชับและไม่ยาวเกินไป
     - เลือกข้อมูลที่ตรงประเด็นและสามารถให้คำตอบที่ชัดเจน
-    - **คำตอบต้องใช้สรรพนาม "คุณ"** และ **ไม่ใช้คำลงท้ายที่เป็นคำของผู้หญิง เช่น "ค่ะ" หรือ "คะ"**
     
     โปรดสรุปข้อมูลที่สำคัญที่สุดเพื่อให้ตอบคำถามได้ตรงประเด็น
     **คำแนะนำเพิ่มเติม**:
@@ -72,7 +71,7 @@ def summarize_answer(question, context_p, previous_context):
     )
 
     # แทนที่คำว่า "ค่ะ" หรือ "คะ" ด้วย "ครับ"
-    final_answer = final_prompt.replace("ค่ะ", "ครับ").replace("คะ", "ครับ")
+    final_answer = final_prompt.replace("ค่ะ", "ครับ").replace("คะ", "ครับ").replace("คั้บ","ครับ").replace("คับ","ครับ")
 
     return final_answer
 
@@ -85,11 +84,14 @@ def base_system(question, context_p, emotional_p, is_first_turn: bool):
     base_prompt = PromptTemplate.from_template("""
     คุณคือเจ้าหน้าที่ฝ่ายตอบคำถามนักศึกษาจากสำนักคอมพิวเตอร์ มหาวิทยาลัยบูรพา
     โปรดวิเคราะห์ข้อมูลและสรุปโปรไฟล์ของผู้สนทนาเท่าที่มีอยู่ในข้อความอย่างสุภาพและรอบคอบ
-    
-    **ข้อควรปฏิบัติที่ต้องทำ** :
-    ให้แสดง "{greeting}" ขึ้นต้นประโยคเป็นการทักทายครั้งแรก 
-    แต่ถ้าเป็นแสดงเป็นค่า "{greeting}"= "None" ไม่ต้องสนใจและไม่ต้องแสดงข้อความนี้
-
+        
+    ให้เช็คเงื่อนไขของค่านี้ทุกครั้ง: "{is_first_turn}"
+    -ถ้าได้ true ให้ตอบ                                           
+    "สวัสดีครับ ฉันคือ BUCC BOT เป็น AI ที่คอยช่วยเหลือและตอบคำถามเบื้องต้น กรุณาพิมพ์คำถามให้ชัดเจนเพื่อให้ได้รับคำตอบที่ตรงประเด็น"
+    ตอนเริ่มต้นประโยค
+    -ถ้าได้ false คือไม่ต้องตอบ  "สวัสดีครับ ฉันคือ BUCC BOT เป็น AI ที่คอยช่วยเหลือและตอบคำถามเบื้องต้น กรุณาพิมพ์คำถามให้ชัดเจนเพื่อให้ได้รับคำตอบที่ตรงประเด็น"
+    ตอนเริ่มต้นประโยค
+                                               
     คำถามล่าสุด: "{question}"
     ให้ตอบตาม context นี้: "{context}"
 
@@ -117,15 +119,14 @@ def base_system(question, context_p, emotional_p, is_first_turn: bool):
     โปรดตอบคำถามให้ได้ตรงประเด็น ไม่แต่งเติมหรือปรุงแต่งคำเอง
     """)
 
-    # เพิ่มการตั้งค่าทักทายตามเงื่อนไข is_first_turn
-    greeting = "สวัสดีครับ ฉันคือ BUCC BOT เป็น AI ที่คอยช่วยเหลือและตอบคำถามเบื้องต้น กรุณาพิมพ์คำถามให้ชัดเจนเพื่อให้ได้รับคำตอบที่ตรงประเด็น" if is_first_turn else "None"
+    # เพิ่มการตั้งค่าทักทายตามเงื่อนไข is_first_tur
 
     # เตรียม final_prompt โดยใช้ข้อมูลที่มีอยู่ใน context
     final_prompt = base_prompt.format(
         question=question,
         context=context_p,
         emotional=emotional_p,
-        greeting=greeting
+        is_first_turn=is_first_turn
     )
 
     final_answer = final_prompt.replace("None", "").replace("*", "").replace("!", "").replace("“", "").replace("”", "")
