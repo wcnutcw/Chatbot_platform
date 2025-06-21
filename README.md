@@ -59,7 +59,12 @@ PINECONE_API_KEY=your_pinecone_api_key
 PINECONE_ENV=your_pinecone_environment
 EMBEDDING=embedding_model_name_from_openai
 FACEBOOK_ACCESS_TOKEN = TOKEN_API_FACEBOOK
-HF_TOKEN=your_huggingface_token</pre>
+HF_TOKEN=your_huggingface_token
+TYPHOON_API_KEY=your_key
+TYPHOON_API_URL=https://api.opentyphoon.ai/v1
+</pre>
+
+*สามารถรับ api key ของ facebook ได้จาก https://playground.opentyphoon.ai/api-key
 
 ## 🧪 วิธีรันโปรเจกต์
 ▶️ รัน Backend (FastAPI)
