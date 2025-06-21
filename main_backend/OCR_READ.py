@@ -9,6 +9,7 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 import re
+from typhoon_llm import TyphoonClient
 
 current_directory = os.getcwd()
 env_path = Path(current_directory).parent / 'venv' / '.env'
@@ -16,11 +17,8 @@ load_dotenv(dotenv_path=env_path, override=True)
 
 # คีย์สำหรับ OpenAI
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-llm = ChatOpenAI(
-    model="gpt-4o-mini",
-    temperature=0,
-    openai_api_key=OPENAI_API_KEY
-)
+typhoon_client = TyphoonClient(api_key=os.getenv("TYPHOON_API_KEY"), api_url=os.getenv("TYPHOON_API_URL"))
+
 
 def fix_ocr_spacing(text):
     # แก้กรณีเจอภาษาไทย/อังกฤษเว้นผิดตัว-ตัว
@@ -46,7 +44,8 @@ async def process_image_and_ocr_then_chat(image_url: str) -> str:
         ocr_text_b = pytesseract.image_to_string(img, lang='tha+eng', config=custom_config).strip()
         ocr_text_b=fix_ocr_spacing(ocr_text_b)
         ocr_text_a = ocr_system(ocr_text_b)
-        result = llm.invoke(ocr_text_a)
+        result =  typhoon_client.get_response(ocr_text_a )
+        print(f"result OCR: {result}")
         # AIMessage
         if hasattr(result, "content"):
             return result.content
