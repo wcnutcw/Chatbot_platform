@@ -64,7 +64,7 @@ TYPHOON_API_KEY=your_key
 TYPHOON_API_URL=https://api.opentyphoon.ai/v1
 </pre>
 
-*สามารถรับ api key ของ facebook ได้จาก https://playground.opentyphoon.ai/api-key
+สามารถรับ api key ของ typhoon ได้จาก https://playground.opentyphoon.ai/api-key
 
 ## 🧪 วิธีรันโปรเจกต์
 ▶️ รัน Backend (FastAPI)
