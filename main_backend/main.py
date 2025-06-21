@@ -624,7 +624,7 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                             logging.debug("Starting OCR processing...")
                             ocr_texts = await asyncio.wait_for(
                                 asyncio.gather(*ocr_tasks),
-                                timeout=10.0
+                                timeout=15.0
                             )
                             logging.debug(f"OCR result: {ocr_texts}")
                         except asyncio.TimeoutError:
