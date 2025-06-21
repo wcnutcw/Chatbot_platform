@@ -2,7 +2,6 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 from pymongo import MongoClient
-from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from langgraph.store.memory import InMemoryStore
@@ -12,6 +11,9 @@ from langgraph.graph import StateGraph, START, END
 from pydantic import BaseModel
 from typing_extensions import TypedDict
 from typing import List, Optional
+
+from Prompt import *
+from typhoon_llm import TyphoonClient  # นำเข้า TyphoonClient
 
 # --- .env ---
 load_dotenv()
@@ -32,32 +34,20 @@ if 'session_flags' not in db.list_collection_names():
 userlog_col = db['user_logs']
 session_flag_col = db['session_flags']
 
-# --- LLM ---
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-llm = ChatOpenAI(
-    model="gpt-4o-mini",
-    temperature=0,
-    openai_api_key=OPENAI_API_KEY
-)
+# --- ใช้ TyphoonClient แทนฟังก์ชัน typhoon_wrapper ---
+typhoon_client = TyphoonClient(api_key=os.getenv("TYPHOON_API_KEY"), api_url=os.getenv("TYPHOON_API_URL"))
+
 prompt_template = ChatPromptTemplate.from_messages([
     ("system", "{system_message}"),
     MessagesPlaceholder("messages")
 ])
-llm_model = prompt_template | llm
+
+# --- Memory ---
 store = InMemoryStore()
 
 def clean_context_text(text: str, min_length: int = 30):
     lines = text.split("\n")
     return "\n".join([line.strip() for line in lines if len(line.strip()) > min_length])
-
-# --- Profile Model ---
-class Profile(BaseModel):
-    name: Optional[str]
-    age: Optional[int]
-    profession: Optional[str]
-    hobby: Optional[List[str]]
-
-structured_llm = prompt_template | llm.with_structured_output(Profile, method="function_calling")
 
 # -------------------
 # Data Persistence
@@ -98,45 +88,10 @@ def set_is_first_greeting_false(user_id: str):
     )
 
 # -------------------
-# Profile Extraction
-# -------------------
-def GetProfileNode(state: dict) -> dict:
-    global store, structured_llm
-    user_id = state.get('user_id', 'unknown')
-    namespace_for_memory = (user_id, "memories")
-    from Prompt import system_message
-
-    result = structured_llm.invoke({
-        "system_message": system_message(state),
-        "messages": [{"role": "user", "content": "get my profile info"}]
-    })
-    profile_mem = store.get(namespace_for_memory, key="profile")
-    profile = profile_mem.value if profile_mem else {
-        'name': None, 'age': None, 'profession': None, 'hobby': []
-    }
-    if not isinstance(profile['hobby'], list):
-        profile['hobby'] = list(profile['hobby']) if profile['hobby'] else []
-
-    if result.name:
-        profile['name'] = result.name
-    if result.age:
-        profile['age'] = result.age
-    if result.profession:
-        profile['profession'] = result.profession
-    if result.hobby:
-        if isinstance(result.hobby, str):
-            if result.hobby not in profile['hobby']:
-                profile['hobby'].append(result.hobby)
-        elif isinstance(result.hobby, list):
-            profile['hobby'] = list(set(profile['hobby']).union(result.hobby))
-    store.put(namespace_for_memory, "profile", profile)
-    return state
-
-# -------------------
 # Chat Core
 # -------------------
 def ChatNode(state: dict, context, emotional: str, is_first_greeting: bool = False) -> dict:
-    global store, llm_model
+    global store, typhoon_client
     user_id = state.get('user_id', 'unknown')
     context_p = ""
 
@@ -147,47 +102,59 @@ def ChatNode(state: dict, context, emotional: str, is_first_greeting: bool = Fal
     else:
         context_p = clean_context_text(str(context))
 
-    namespace_for_memory = (user_id, "memories")
-    profile_str = ""
-    user_profile_mem = store.get(namespace_for_memory, key="profile")
-    if user_profile_mem:
-        pdata = user_profile_mem.value
-        profile_str = f"User Profile:\nName: {pdata.get('name')}\nAge: {pdata.get('age')}\nProfession: {pdata.get('profession')}\nHobby: {pdata.get('hobby')}\n\n"
-
+    # ดึงข้อความจาก longterm history และ user history
     ltm_msgs = get_longterm_history(user_id)
     ltm_user = get_longterm_user(user_id)
     previous_context = "\n".join([msg["content"] for msg in ltm_msgs])
-    previous_context_user = "\n".join([msg["content"] for msg in ltm_user])
+
     message_content = state["messages"][0]["content"]
 
-    from Prompt import base_system
     intro_hint = "ข้อมูลต่อไปนี้อาจมีส่วนช่วยในการตอบคำถามของผู้ใช้:\n"
-    system_message = base_system(
+    import json
+    with open('data.json', 'r', encoding='utf-8') as file:
+        data_json = json.load(file)
+
+    # Step 1: ใช้ฟังก์ชัน analyze_question() เพื่อวิเคราะห์คำถาม
+    create_context = analyze_question(
+        message_content,
+        intro_hint + context_p,
+        data_json
+    )
+
+    # ใช้ TyphoonClient แทน Typhoon response
+    ## LLM1 : คัดกรองข้อมูลจากคำถามและ context ที่ได้รับ
+    context_new = typhoon_client.get_response(create_context)
+    print(f"คำตอบจาก Typhoon 1: {context_new}")
+
+    # Step 2: ใช้ Typhoon หรือ LLM ในการสรุปคำตอบจากข้อมูลที่ได้รับ
+    summarized_answer = summarize_answer(
         question=message_content,
-        context_p=intro_hint + context_p,
+        context_p=context_new,
+        previous_context=previous_context  # แก้ไขเป็น previous_context แทน previous_context_user
+    )
+
+    # ส่งคำขอไปยัง TyphoonClient หรือ LLM ในการประมวลผลคำตอบ
+    result = typhoon_client.get_response(summarized_answer)
+    print(f"คำตอบจาก Typhoon 2: {result}")
+
+    # Step 3: ใช้ Typhoon หรือ LLM ในการตอบคำถามในบทบาทเจ้าหน้าที่สำนักคอมพิวเตอร์
+    system_message_str = base_system(
+        question=message_content,
+        context_p=result,
         emotional_p=emotional,
-        previous_context=previous_context_user,
         is_first_turn=is_first_greeting
     )
-    system_message += "\n\n" + profile_str + "File Context (relevant chunks):\n"
 
-    merged_msgs = ltm_msgs + [m for m in state["messages"] if m not in ltm_msgs]
+    # ส่งคำขอไปยัง TyphoonClient หรือ LLM ในการประมวลผลคำตอบ
+    final_result = typhoon_client.get_response(system_message_str)
+    print(f"คำตอบจาก Typhoon 3: {final_result}")
 
-    # print("🔎 SYSTEM MESSAGE:\n", system_message)
-    # print("📚 MERGED MESSAGES:")
-    for m in merged_msgs:
-        print(f"- {m['role']}: {m['content']}")
-
-    result = llm_model.invoke({
-        "system_message": system_message,
-        "messages": merged_msgs
-    })
-    print(f"คำตอบจากLLM : {result}")
-
-    msg_content = result.content if hasattr(result, "content") else str(result)
+    # เก็บผลลัพธ์ที่ตอบกลับไปในฐานข้อมูล
+    msg_content = final_result if isinstance(final_result, str) else str(final_result)
     msg_to_add = {"role": "assistant", "content": msg_content}
     state["messages"].append(msg_to_add)
 
+    # บันทึกผลลัพธ์ที่ตอบกลับไปในฐานข้อมูล
     userlog_col.insert_one({
         'user_id': user_id,
         'message': msg_content,
@@ -228,8 +195,6 @@ def chat_interactive(user_id: str, user_message, context, emotional):
 State = TypedDict("State", {"messages": List[dict], "user_id": str})
 graph_builder = StateGraph(State)
 graph_builder.add_node("ChatNode", ChatNode)
-graph_builder.add_node("GetProfileNode", GetProfileNode)
 graph_builder.add_edge(START, "ChatNode")
-graph_builder.add_edge("ChatNode", "GetProfileNode")
-graph_builder.add_edge("GetProfileNode", END)
+graph_builder.add_edge("ChatNode", END)
 graph = graph_builder.compile(checkpointer=MemorySaver())

@@ -490,8 +490,9 @@ async def process_chatbot_query(sender_id: str, user_message: str, emotional:str
             
             from stopword import extract_keywords_from_query
             keywords = extract_keywords_from_query(user_message)
-
-            context_bf = await retrieve_context_from_mongodb(collection, user_message)
+            keyword_query = " ".join(keywords) if keywords else user_message
+            print(f"keywords : {keyword_query}")
+            context_bf = await retrieve_context_from_mongodb(collection, keyword_query)
             num_tokens_context = count_tokens(context_bf, model="gpt-4o-mini")
             context = reduce_context(context_bf, num_tokens_context,keywords)
             # print(f"context : {context}")

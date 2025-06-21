@@ -9,11 +9,18 @@ target_phrases = [
 target_embeddings = model.encode(target_phrases, convert_to_tensor=True)
 
 def is_similar_to_contact_staff(message_text, threshold=0.6):
+    # คำที่ไม่ควรตรวจจับ
+    exclude_keywords = ["หน่วยงาน", "อะไร", "ที่ไหน", "ติดต่อ", "รายงานตัว", "ใช่มั้ยคะ", "ยังเลยค่ะ"]
+
+    # หลีกเลี่ยงการตรวจจับข้อความที่มีคำถามที่ไม่เกี่ยวข้อง
+    if any(keyword in message_text for keyword in exclude_keywords):
+        return False
+
     input_embedding = model.encode(message_text, convert_to_tensor=True)
     cosine_scores = util.pytorch_cos_sim(input_embedding, target_embeddings)
     max_score = cosine_scores.max().item()
-    return max_score >= threshold
 
+    return max_score >= threshold
 
                     
 # ในฟังก์ชันหลัก (เช่น fastapi endpoint)
