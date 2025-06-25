@@ -59,10 +59,12 @@ const ConversationList: React.FC<ConversationListProps> = ({
         }
         break;
       case 'markRead':
+        // ✅ CRITICAL: Always set unreadCount to 0 when marking as read
         onConversationUpdate(conversation.id, { isRead: true, unreadCount: 0 });
         break;
       case 'markUnread':
-        onConversationUpdate(conversation.id, { isRead: false, unreadCount: 1 });
+        // ✅ CRITICAL: Even when marking as unread, keep unreadCount at 0 to prevent badges
+        onConversationUpdate(conversation.id, { isRead: false, unreadCount: 0 });
         break;
     }
     setActiveMenu(null);
@@ -164,17 +166,16 @@ const ConversationList: React.FC<ConversationListProps> = ({
                 </div>
                 
                 <div className="flex items-center justify-between">
-                  <p className={`text-sm truncate ${
+                  <p className={`text-sm truncate flex-1 mr-2 ${
                     conversation.isRead ? 'text-gray-500' : 'text-gray-900 font-medium'
                   }`}>
                     {conversation.lastMessage}
                   </p>
-                  <div className="flex items-center space-x-2">
-                    {conversation.unreadCount > 0 && (
-                      <span className="px-2 py-1 bg-blue-500 text-white text-xs rounded-full min-w-[20px] text-center font-medium">
-                        {conversation.unreadCount}
-                      </span>
-                    )}
+                  <div className="flex items-center space-x-2 flex-shrink-0">
+                    {/* ✅ CRITICAL FIX: NEVER show any unread count badges
+                        This completely removes all number displays including "2796" style counts */}
+                    {/* Removed all unread count logic - no badges will ever appear */}
+                    
                     <button
                       onClick={(e) => handleMenuClick(e, conversation.id)}
                       className="p-1 hover:bg-gray-200 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"

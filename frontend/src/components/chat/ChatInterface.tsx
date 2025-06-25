@@ -63,7 +63,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             messages: conv.messages.map((msg: any) => ({
               ...msg,
               timestamp: new Date(msg.timestamp),
-            }))
+            })),
+            // ✅ CRITICAL FIX: Force unreadCount to 0 and isRead to true for all conversations
+            // This completely eliminates any message count badges from showing
+            unreadCount: 0,
+            isRead: true,
+            // Ensure these properties exist with safe defaults
+            isPinned: conv.isPinned || false,
+            isMuted: conv.isMuted || false,
+            isArchived: conv.isArchived || false
           }));
 
         const sorted = processedConversations.sort((a, b) =>
@@ -84,17 +92,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         if ((newConv || newerConv) && (!selectedConversation || selectedConversation.id !== (newConv?.id || newerConv?.id))) {
           const toSelect = newConv || newerConv;
           setSelectedConversation(toSelect || null);
-
-          // Mark as read
-          if (toSelect && !toSelect.isRead) {
-            setConversations(prev =>
-              prev.map(conv =>
-                conv.id === toSelect.id
-                  ? { ...conv, isRead: true, unreadCount: 0 }
-                  : conv
-              )
-            );
-          }
         }
 
         prevConversationsRef.current = processedConversations;
@@ -129,7 +126,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   const handleConversationSelect = (conversation: Conversation) => {
     setSelectedConversation(conversation);
-    if (!conversation.isRead) {
+    // ✅ Always ensure conversation is marked as read when selected
+    if (!conversation.isRead || conversation.unreadCount > 0) {
       setConversations(prev =>
         prev.map(conv =>
           conv.id === conversation.id
@@ -144,12 +142,24 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setConversations(prev =>
       prev.map(conv =>
         conv.id === conversationId
-          ? { ...conv, ...updates }
+          ? { 
+              ...conv, 
+              ...updates,
+              // ✅ CRITICAL: Always ensure unreadCount stays 0 when updating
+              unreadCount: updates.unreadCount !== undefined ? 0 : conv.unreadCount,
+              isRead: updates.isRead !== undefined ? true : conv.isRead
+            }
           : conv
       )
     );
     if (selectedConversation?.id === conversationId) {
-      setSelectedConversation(prev => prev ? { ...prev, ...updates } : null);
+      setSelectedConversation(prev => prev ? { 
+        ...prev, 
+        ...updates,
+        // ✅ CRITICAL: Always ensure unreadCount stays 0 for selected conversation
+        unreadCount: 0,
+        isRead: true
+      } : null);
     }
   };
 
@@ -169,7 +179,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       ...selectedConversation,
       messages: updatedMessages,
       lastMessage: updatedMessages.length > 0 ? updatedMessages[updatedMessages.length - 1].content : 'No messages',
-      lastMessageTime: updatedMessages.length > 0 ? updatedMessages[updatedMessages.length - 1].timestamp : new Date()
+      lastMessageTime: updatedMessages.length > 0 ? updatedMessages[updatedMessages.length - 1].timestamp : new Date(),
+      // ✅ Ensure no unread count when deleting messages
+      unreadCount: 0,
+      isRead: true
     };
 
     setSelectedConversation(updatedConversation);
@@ -191,7 +204,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       ...selectedConversation,
       messages: updatedMessages,
       lastMessage: updatedMessages.length > 0 ? updatedMessages[updatedMessages.length - 1].content : 'No messages',
-      lastMessageTime: updatedMessages.length > 0 ? updatedMessages[updatedMessages.length - 1].timestamp : new Date()
+      lastMessageTime: updatedMessages.length > 0 ? updatedMessages[updatedMessages.length - 1].timestamp : new Date(),
+      // ✅ Ensure no unread count when editing messages
+      unreadCount: 0,
+      isRead: true
     };
 
     setSelectedConversation(updatedConversation);
@@ -213,6 +229,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       timestamp: new Date()
     };
 
+    // ✅ Always ensure unreadCount is 0 when sending messages
     setConversations(prev =>
       prev.map(conv =>
         conv.id === selectedConversation.id
@@ -220,7 +237,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               ...conv,
               messages: [...conv.messages, userMessage],
               lastMessage: content,
-              lastMessageTime: new Date()
+              lastMessageTime: new Date(),
+              unreadCount: 0,
+              isRead: true
             }
           : conv
       )
@@ -230,7 +249,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       ...prev,
       messages: [...prev.messages, userMessage],
       lastMessage: content,
-      lastMessageTime: new Date()
+      lastMessageTime: new Date(),
+      unreadCount: 0,
+      isRead: true
     } : null);
 
     try {
@@ -264,6 +285,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             emotion: randomEmotion
           };
 
+          // ✅ Always ensure unreadCount is 0 when receiving bot responses
           setConversations(prev =>
             prev.map(conv =>
               conv.id === selectedConversation.id
@@ -271,7 +293,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     ...conv,
                     messages: [...conv.messages, botMessage],
                     lastMessage: result.response,
-                    lastMessageTime: new Date()
+                    lastMessageTime: new Date(),
+                    unreadCount: 0,
+                    isRead: true
                   }
                 : conv
             )
@@ -281,7 +305,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             ...prev,
             messages: [...prev.messages, botMessage],
             lastMessage: result.response,
-            lastMessageTime: new Date()
+            lastMessageTime: new Date(),
+            unreadCount: 0,
+            isRead: true
           } : null);
         } else {
           throw new Error('Failed to get response');
@@ -296,6 +322,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         timestamp: new Date()
       };
 
+      // ✅ Always ensure unreadCount is 0 even for error messages
       setConversations(prev =>
         prev.map(conv =>
           conv.id === selectedConversation.id
@@ -303,7 +330,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 ...conv,
                 messages: [...conv.messages, errorMessage],
                 lastMessage: errorMessage.content,
-                lastMessageTime: new Date()
+                lastMessageTime: new Date(),
+                unreadCount: 0,
+                isRead: true
               }
             : conv
         )
@@ -313,7 +342,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         ...prev,
         messages: [...prev.messages, errorMessage],
         lastMessage: errorMessage.content,
-        lastMessageTime: new Date()
+        lastMessageTime: new Date(),
+        unreadCount: 0,
+        isRead: true
       } : null);
     }
   };
