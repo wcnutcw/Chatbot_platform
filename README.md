@@ -74,9 +74,13 @@ TYPHOON_API_URL=https://api.opentyphoon.ai/v1
 
 ## 🖼️ รัน Frontend (Streamlit)
 เปิด Terminal ใหม่:
-```cd fontend```
+```cd frontend```
 
 ```streamlit run app.py```
+## 🖼️ รัน Frontend (Prototype)
+```cd frontend```
+
+```npm run dev```
 
 ## 🛠️ แก้ไขปัญหาที่พบบ่อย
 🔄 อัปเดต / ติดตั้งใหม่
