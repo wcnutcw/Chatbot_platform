@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes button-press {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+.animate-button-press {
+  animation: button-press 0.15s ease-out;
+}
+
+/* Enhanced button feedback */
+.button-pressed {
+  transform: scale(0.95);
+  transition: transform 0.1s ease-out;
+}
+
+/* Smooth transitions for all interactive elements */
+button, input, select {
+  transition: all 0.2s ease-out;
+}
+
+/* Custom focus styles */
+button:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Disabled state improvements */
+button:disabled {
+  transition: all 0.2s ease-out;
+}
+
+/* Hover state improvements */
+button:not(:disabled):hover {
+  transition: all 0.15s ease-out;
+}
