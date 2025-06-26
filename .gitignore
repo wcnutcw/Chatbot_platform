@@ -11,4 +11,4 @@ venv/
 frontend/node_modules
 frontend/__pycache__
 node_modules
-.history/fontend
+.history/fontend/
