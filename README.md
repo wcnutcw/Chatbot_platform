@@ -68,7 +68,7 @@ You can get the typhoon api key from https://playground.opentyphoon.ai/api-key
 ▶️ Run the Backend (FastAPI)
 ```cd main_backend```
 
-```uvicorn main:app --reload --port 8000```
+```uvicorn main:app --host 0.0.0.0 --port 8000 --reload ```
 
 ## Alternative run frontend 
 
