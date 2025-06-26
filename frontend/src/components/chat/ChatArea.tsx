@@ -18,7 +18,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
   onEditMessage 
 }) => {
   const [inputMessage, setInputMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  // ✅ CRITICAL FIX: Remove isLoading state completely for admin messages
+  // Admin messages should appear instantly without any loading animation
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState('');
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
@@ -60,21 +61,21 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     setTimeout(() => adjustTextareaHeight(), 0);
   };
 
+  // ✅ CRITICAL FIX: Remove all loading states from handleSendMessage
   const handleSendMessage = async () => {
-    if (!inputMessage.trim() || isLoading) return;
+    if (!inputMessage.trim()) return;
 
     const message = inputMessage;
-    setInputMessage('');
+    setInputMessage(''); // Clear input immediately
     setTimeout(() => adjustTextareaHeight(), 0);
-    setIsLoading(true);
 
+    // ✅ NO LOADING STATE: Admin message appears instantly in ChatInterface
     try {
       await onSendMessage(message);
     } catch (error) {
       console.error('Send message error:', error);
-    } finally {
-      setIsLoading(false);
     }
+    // ✅ NO setIsLoading(false) - no loading state at all
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -286,21 +287,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             );
           })}
           
-          {/* ✅ CLEAN: Minimal loading indicator */}
-          {isLoading && (
-            <div className="flex items-start space-x-2 justify-end">
-              <div className="bg-blue-100 rounded-2xl rounded-br-md px-3 py-2">
-                <div className="flex space-x-1">
-                  <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></div>
-                  <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                </div>
-              </div>
-              <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                <Bot className="w-3 h-3 text-green-600" />
-              </div>
-            </div>
-          )}
+          {/* ✅ CRITICAL FIX: COMPLETELY REMOVE loading animation
+              Admin messages now appear instantly without any loading dots */}
         </div>
         
         <div ref={messagesEndRef} />
@@ -329,7 +317,6 @@ const ChatArea: React.FC<ChatAreaProps> = ({
               onChange={handleInputChange}
               onKeyPress={handleKeyPress}
               placeholder="พิมพ์ข้อความ..."
-              disabled={isLoading}
               className="w-full bg-transparent border-none outline-none resize-none text-sm placeholder-gray-500 leading-4"
               rows={1}
               style={{ 
@@ -343,21 +330,18 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             />
           </div>
           
-          {/* ✅ FACEBOOK-STYLE: Minimal send button */}
+          {/* ✅ FACEBOOK-STYLE: Minimal send button - NO LOADING STATE */}
           <button
             onClick={handleSendMessage}
-            disabled={!inputMessage.trim() || isLoading}
+            disabled={!inputMessage.trim()}
             className={`p-1 rounded-full transition-all duration-200 flex-shrink-0 ${
-              !inputMessage.trim() || isLoading
+              !inputMessage.trim()
                 ? 'text-gray-400 cursor-not-allowed'
                 : 'text-blue-600 hover:bg-blue-100'
             }`}
           >
-            {isLoading ? (
-              <div className="w-3.5 h-3.5 border border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-              <Send className="w-3.5 h-3.5" />
-            )}
+            {/* ✅ CRITICAL FIX: Always show Send icon - NO loading spinner */}
+            <Send className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
