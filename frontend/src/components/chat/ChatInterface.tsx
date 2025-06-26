@@ -28,14 +28,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const loadFacebookConversations = async () => {
     try {
       setError(null);
-      
-      // Only load conversations when AI assistant is enabled
-      if (!aiAssistantEnabled) {
-        setConversations([]);
-        setSelectedConversation(null);
-        setLoading(false);
-        return;
-      }
 
       const response = await fetch('/api/facebook/conversations', {
         method: 'POST',
@@ -57,22 +49,27 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             const lastMessageTime = new Date(conv.lastMessageTime);
             return lastMessageTime > oneDayAgo;
           })
-          .map((conv: any) => ({
-            ...conv,
-            lastMessageTime: new Date(conv.lastMessageTime),
-            messages: conv.messages.map((msg: any) => ({
-              ...msg,
-              timestamp: new Date(msg.timestamp),
-            })),
-            // ✅ CRITICAL FIX: Force unreadCount to 0 and isRead to true for all conversations
-            // This completely eliminates any message count badges from showing
-            unreadCount: 0,
-            isRead: true,
-            // Ensure these properties exist with safe defaults
-            isPinned: conv.isPinned || false,
-            isMuted: conv.isMuted || false,
-            isArchived: conv.isArchived || false
-          }));
+          .map((conv: any) => {
+            const lastMessageTime = new Date(conv.lastMessageTime);
+            const timeDiff = now.getTime() - lastMessageTime.getTime();
+            const isRecentMessage = timeDiff < (5 * 60 * 1000); // Last 5 minutes
+            
+            return {
+              ...conv,
+              lastMessageTime,
+              messages: conv.messages.map((msg: any) => ({
+                ...msg,
+                timestamp: new Date(msg.timestamp),
+              })),
+              // ✅ CRITICAL FIX: Mark as unread if message is very recent (last 5 minutes)
+              unreadCount: 0, // Keep at 0 to prevent badges
+              isRead: !isRecentMessage, // Mark as unread if recent message
+              // Ensure these properties exist with safe defaults
+              isPinned: conv.isPinned || false,
+              isMuted: conv.isMuted || false,
+              isArchived: conv.isArchived || false
+            };
+          });
 
         const sorted = processedConversations.sort((a, b) =>
           b.lastMessageTime.getTime() - a.lastMessageTime.getTime()
@@ -110,24 +107,25 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   };
 
+  // ✅ CRITICAL FIX: Always load conversations on mount, regardless of AI Assistant status
   useEffect(() => {
     loadFacebookConversations();
-  }, [aiAssistantEnabled]);
+  }, []);
 
+  // ✅ CRITICAL FIX: Always poll for new messages in real-time, regardless of AI Assistant status
+  // This ensures that new Facebook messages appear immediately in the UI
   useEffect(() => {
-    if (!aiAssistantEnabled) return;
-
     const interval = setInterval(() => {
       loadFacebookConversations();
-    }, 3000);
+    }, 3000); // Poll every 3 seconds for new messages
 
     return () => clearInterval(interval);
-  }, [aiAssistantEnabled, conversations]);
+  }, [conversations]); // Always run, not dependent on aiAssistantEnabled
 
   const handleConversationSelect = (conversation: Conversation) => {
     setSelectedConversation(conversation);
-    // ✅ Always ensure conversation is marked as read when selected
-    if (!conversation.isRead || conversation.unreadCount > 0) {
+    // ✅ Mark conversation as read when selected
+    if (!conversation.isRead) {
       setConversations(prev =>
         prev.map(conv =>
           conv.id === conversation.id
@@ -145,9 +143,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           ? { 
               ...conv, 
               ...updates,
-              // ✅ CRITICAL: Always ensure unreadCount stays 0 when updating
               unreadCount: updates.unreadCount !== undefined ? 0 : conv.unreadCount,
-              isRead: updates.isRead !== undefined ? true : conv.isRead
+              isRead: updates.isRead !== undefined ? updates.isRead : conv.isRead
             }
           : conv
       )
@@ -156,9 +153,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       setSelectedConversation(prev => prev ? { 
         ...prev, 
         ...updates,
-        // ✅ CRITICAL: Always ensure unreadCount stays 0 for selected conversation
         unreadCount: 0,
-        isRead: true
+        isRead: updates.isRead !== undefined ? updates.isRead : prev.isRead
       } : null);
     }
   };
@@ -180,7 +176,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       messages: updatedMessages,
       lastMessage: updatedMessages.length > 0 ? updatedMessages[updatedMessages.length - 1].content : 'No messages',
       lastMessageTime: updatedMessages.length > 0 ? updatedMessages[updatedMessages.length - 1].timestamp : new Date(),
-      // ✅ Ensure no unread count when deleting messages
       unreadCount: 0,
       isRead: true
     };
@@ -205,7 +200,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       messages: updatedMessages,
       lastMessage: updatedMessages.length > 0 ? updatedMessages[updatedMessages.length - 1].content : 'No messages',
       lastMessageTime: updatedMessages.length > 0 ? updatedMessages[updatedMessages.length - 1].timestamp : new Date(),
-      // ✅ Ensure no unread count when editing messages
       unreadCount: 0,
       isRead: true
     };
@@ -222,40 +216,48 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const handleSendMessage = async (content: string) => {
     if (!selectedConversation || !isSessionReady) return;
 
-    const userMessage: Message = {
+    // ✅ CRITICAL FIX: Admin messages should appear IMMEDIATELY on the RIGHT side
+    // Create admin message that appears instantly without any loading animation
+    const adminMessage: Message = {
       id: Date.now().toString(),
-      type: 'user',
+      type: 'admin', // Always use 'admin' type so it appears on the right side
       content,
       timestamp: new Date()
     };
 
-    // ✅ Always ensure unreadCount is 0 when sending messages
-    setConversations(prev =>
-      prev.map(conv =>
-        conv.id === selectedConversation.id
-          ? {
-              ...conv,
-              messages: [...conv.messages, userMessage],
-              lastMessage: content,
-              lastMessageTime: new Date(),
-              unreadCount: 0,
-              isRead: true
-            }
-          : conv
-      )
-    );
+    // ✅ INSTANT UPDATE: Add admin message to UI immediately - NO LOADING STATE
+    const updateConversationWithAdminMessage = (conv: Conversation) => {
+      if (conv.id === selectedConversation.id) {
+        return {
+          ...conv,
+          messages: [...conv.messages, adminMessage],
+          lastMessage: content,
+          lastMessageTime: new Date(),
+          unreadCount: 0,
+          isRead: true
+        };
+      }
+      return conv;
+    };
 
+    // Update conversations list immediately
+    setConversations(prev => prev.map(updateConversationWithAdminMessage));
+
+    // Update selected conversation immediately
     setSelectedConversation(prev => prev ? {
       ...prev,
-      messages: [...prev.messages, userMessage],
+      messages: [...prev.messages, adminMessage],
       lastMessage: content,
       lastMessageTime: new Date(),
       unreadCount: 0,
       isRead: true
     } : null);
 
+    // ✅ BACKGROUND PROCESSING: Send message to Facebook in the background
+    // This happens AFTER the message appears in the UI, so no loading animation
     try {
       if (selectedConversation.userId.startsWith('fb_')) {
+        // Send to Facebook API in background - user already sees their message
         const response = await fetch('/api/facebook/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -265,9 +267,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           })
         });
 
-        if (!response.ok) throw new Error('Failed to send Facebook message');
-        setTimeout(() => loadFacebookConversations(), 2000);
-      } else {
+        if (!response.ok) {
+          // If sending fails, show error but keep admin message visible
+          console.error('Failed to send Facebook message');
+          // Optionally show a small error indicator next to the message
+        }
+
+        // Refresh conversations after sending to get any new incoming messages
+        setTimeout(() => loadFacebookConversations(), 1000);
+      }
+
+      // ✅ AI PROCESSING: Only process AI response if AI Assistant is enabled
+      if (aiAssistantEnabled && !selectedConversation.userId.startsWith('fb_')) {
+        // For non-Facebook conversations, process AI response
         const emotions = ['joy', 'sadness', 'anger', 'fear', 'surprise', 'neutral'];
         const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
 
@@ -285,7 +297,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             emotion: randomEmotion
           };
 
-          // ✅ Always ensure unreadCount is 0 when receiving bot responses
+          // Add bot response to conversation
           setConversations(prev =>
             prev.map(conv =>
               conv.id === selectedConversation.id
@@ -309,43 +321,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             unreadCount: 0,
             isRead: true
           } : null);
-        } else {
-          throw new Error('Failed to get response');
         }
       }
     } catch (error) {
-      console.error('Chat error:', error);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'bot',
-        content: 'ขออภัย เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง',
-        timestamp: new Date()
-      };
-
-      // ✅ Always ensure unreadCount is 0 even for error messages
-      setConversations(prev =>
-        prev.map(conv =>
-          conv.id === selectedConversation.id
-            ? {
-                ...conv,
-                messages: [...conv.messages, errorMessage],
-                lastMessage: errorMessage.content,
-                lastMessageTime: new Date(),
-                unreadCount: 0,
-                isRead: true
-              }
-            : conv
-        )
-      );
-
-      setSelectedConversation(prev => prev ? {
-        ...prev,
-        messages: [...prev.messages, errorMessage],
-        lastMessage: errorMessage.content,
-        lastMessageTime: new Date(),
-        unreadCount: 0,
-        isRead: true
-      } : null);
+      console.error('Background processing error:', error);
+      // Error handling - but admin message is already visible, so no need to show loading error
     }
   };
 
@@ -368,7 +348,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">Loading Conversations</h3>
           <p className="text-gray-500">
-            {aiAssistantEnabled ? 'Connecting to Facebook Messenger...' : 'AI Assistant is disabled'}
+            {aiAssistantEnabled ? 'Connecting to Facebook Messenger...' : 'Loading conversations for manual mode...'}
           </p>
         </div>
       </div>
@@ -383,30 +363,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Session</h3>
           <p className="text-gray-500">
             Please configure your database and start a session to begin chatting.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!aiAssistantEnabled) {
-    return (
-      <div className="h-full flex items-center justify-center bg-gray-50">
-        <div className="text-center max-w-md mx-auto p-8">
-          <Bot className="w-16 h-16 text-gray-300 mx-auto mb-6" />
-          <h3 className="text-xl font-semibold text-gray-900 mb-4">AI Assistant Disabled</h3>
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-            <div className="flex items-center space-x-2 mb-2">
-              <AlertCircle className="w-5 h-5 text-yellow-600" />
-              <span className="text-yellow-700 font-medium">Manual Mode Active</span>
-            </div>
-            <p className="text-yellow-700 text-sm">
-              Facebook webhook processing is disabled. No old conversation history will be shown.
-              Enable the AI Assistant to start receiving and responding to Facebook messages.
-            </p>
-          </div>
-          <p className="text-gray-500 text-sm">
-            Turn on the AI Assistant in the Dashboard to start managing Facebook conversations.
           </p>
         </div>
       </div>

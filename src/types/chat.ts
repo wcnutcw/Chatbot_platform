@@ -1,6 +1,6 @@
 export interface Message {
   id: string;
-  type: 'user' | 'bot';
+  type: 'user' | 'bot' | 'admin';
   content: string;
   timestamp: Date;
   emotion?: string;

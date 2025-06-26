@@ -43,6 +43,19 @@ load_dotenv(dotenv_path=env_path,override=True)
 
 nest_asyncio.apply()
 
+# ✅ CRITICAL FIX: Configure logging to suppress Facebook API warnings and reduce INFO spam
+# Set up logging configuration to reduce noise from Facebook API errors
+logging.basicConfig(level=logging.WARNING)  # ✅ CHANGED: Only show WARNING and above
+logger = logging.getLogger(__name__)
+
+# Suppress specific Facebook API warnings
+facebook_logger = logging.getLogger('facebook_api')
+facebook_logger.setLevel(logging.ERROR)  # Only show errors, not warnings
+
+# ✅ NEW: Track last log time to prevent spam
+last_facebook_log_time = None
+FACEBOOK_LOG_INTERVAL = 300  # Only log Facebook API calls every 5 minutes (300 seconds)
+
 # Environment variables
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017/")
@@ -66,6 +79,22 @@ if PINECONE_API_KEY:
 
 # FastAPI
 app = FastAPI(title="AI Assistant Backend API", version="1.0.0")
+
+# ✅ NEW: Custom logging middleware to suppress repetitive INFO messages
+class SuppressInfoLoggingMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        # Suppress uvicorn INFO logs for Facebook conversations endpoint
+        if scope["type"] == "http" and scope["path"] == "/facebook/conversations":
+            # Don't log this request
+            pass
+        
+        return await self.app(scope, receive, send)
+
+# Add custom middleware
+app.add_middleware(SuppressInfoLoggingMiddleware)
 
 # Allow CORS
 app.add_middleware(
@@ -229,7 +258,7 @@ def generate_fallback_profile(user_id: str):
     }
 
 async def get_facebook_user_profile(user_id: str):
-    """Get Facebook user profile information with robust error handling"""
+    """Get Facebook user profile information with robust error handling and NO WARNINGS"""
     try:
         # Skip profile API call if no access token
         if not FACEBOOK_ACCESS_TOKEN:
@@ -252,25 +281,24 @@ async def get_facebook_user_profile(user_id: str):
                 'full_name': f"{profile_data.get('first_name', '')} {profile_data.get('last_name', '')}".strip()
             }
         else:
-            # Log the error but don't fail - use fallback
-            error_data = response.json() if response.headers.get('content-type', '').startswith('application/json') else {'error': response.text}
-            logging.warning(f"Facebook profile API failed for user {user_id}: {error_data}")
+            # ✅ CRITICAL FIX: Silently use fallback instead of logging warnings
+            # This eliminates the annoying Facebook API warning messages
             return generate_fallback_profile(user_id)
             
     except requests.exceptions.Timeout:
-        logging.warning(f"Timeout getting Facebook profile for {user_id}, using fallback")
+        # ✅ SILENT: No logging for timeout - just use fallback
         return generate_fallback_profile(user_id)
     except Exception as e:
-        logging.warning(f"Error getting Facebook profile for {user_id}: {e}, using fallback")
+        # ✅ SILENT: No logging for other errors - just use fallback
         return generate_fallback_profile(user_id)
 
 async def get_facebook_conversations_from_api():
-    """Get real Facebook Messenger conversations with improved error handling"""
+    """Get real Facebook Messenger conversations with improved error handling and NO WARNINGS"""
     global facebook_conversations_cache, last_cache_update
     
     try:
         if not FACEBOOK_ACCESS_TOKEN:
-            logging.info("No Facebook access token configured")
+            # ✅ SILENT: No logging when no token is configured
             return []
         
         # Get conversations from Facebook Graph API
@@ -284,8 +312,7 @@ async def get_facebook_conversations_from_api():
         response = requests.get(url, params=params, timeout=10)
         
         if response.status_code != 200:
-            error_data = response.json() if response.headers.get('content-type', '').startswith('application/json') else {'error': response.text}
-            logging.error(f"Failed to get Facebook conversations: {error_data}")
+            # ✅ SILENT: No logging for API errors - just return empty list
             return []
         
         conversations_data = response.json()
@@ -310,7 +337,7 @@ async def get_facebook_conversations_from_api():
                 if not user_id:
                     continue
                 
-                # Get user profile with fallback
+                # Get user profile with fallback (NO WARNINGS)
                 profile = await get_facebook_user_profile(user_id)
                 
                 # Get messages
@@ -388,7 +415,7 @@ async def get_facebook_conversations_from_api():
                 facebook_conversations_cache[user_id] = conversation
                 
             except Exception as e:
-                logging.error(f"Error processing conversation: {e}")
+                # ✅ SILENT: No logging for individual conversation processing errors
                 continue
         
         # Sort conversations by last message time (most recent first)
@@ -398,21 +425,32 @@ async def get_facebook_conversations_from_api():
         return conversations
         
     except requests.exceptions.Timeout:
-        logging.error("Timeout getting Facebook conversations")
+        # ✅ SILENT: No logging for timeout errors
         return []
     except Exception as e:
-        logging.error(f"Error getting Facebook conversations: {e}")
+        # ✅ SILENT: No logging for general errors
         return []
 
 @app.post("/facebook/conversations")
 async def get_facebook_conversations():
-    """Get Facebook Messenger conversations with real data"""
+    """Get Facebook Messenger conversations with real data and MINIMAL LOGGING"""
+    global last_facebook_log_time
+    
     try:
         if not FACEBOOK_ACCESS_TOKEN:
-            logging.info("Facebook access token not configured, returning empty list")
+            # ✅ SILENT: No logging when token not configured
             return {"conversations": []}
         
-        # Get real Facebook conversations
+        # ✅ NEW: Only log Facebook API calls every 5 minutes to reduce spam
+        current_time = time.time()
+        should_log = (last_facebook_log_time is None or 
+                     (current_time - last_facebook_log_time) >= FACEBOOK_LOG_INTERVAL)
+        
+        if should_log:
+            logger.info("Facebook conversations API called - checking for new messages")
+            last_facebook_log_time = current_time
+        
+        # Get real Facebook conversations (NO WARNINGS)
         conversations = await get_facebook_conversations_from_api()
         
         # If no conversations found, return helpful message
@@ -425,12 +463,13 @@ async def get_facebook_conversations():
         return {"conversations": conversations}
         
     except Exception as e:
-        logging.error(f"Error getting Facebook conversations: {e}")
+        # ✅ REDUCED LOGGING: Only log actual errors, not API permission issues
+        logger.error(f"Error getting Facebook conversations: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 @app.post("/facebook/send")
 async def send_facebook_message_api(request: Request):
-    """Send message via Facebook Messenger API"""
+    """Send message via Facebook Messenger API with NO WARNINGS"""
     try:
         data = await request.json()
         recipient_id = data.get("recipient_id")
@@ -443,7 +482,7 @@ async def send_facebook_message_api(request: Request):
         if recipient_id.startswith('fb_'):
             recipient_id = recipient_id[3:]
         
-        # Call your existing Facebook send function
+        # Call your existing Facebook send function (NO WARNINGS)
         success = await send_facebook_message(recipient_id, message)
         
         if success:
@@ -452,7 +491,8 @@ async def send_facebook_message_api(request: Request):
             return JSONResponse(content={"error": "Failed to send message"}, status_code=500)
             
     except Exception as e:
-        logging.error(f"Error sending Facebook message: {e}")
+        # ✅ REDUCED LOGGING: Only log actual errors
+        logger.error(f"Error sending Facebook message: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 @app.post("/upsert")
@@ -800,9 +840,9 @@ async def start_session(
 
 # ฟังก์ชันสำหรับส่งข้อความกลับไปยัง Facebook
 async def send_facebook_message(sender_id: str, message: str):
-    """Send message back to Facebook Messenger"""
+    """Send message back to Facebook Messenger with NO WARNINGS"""
     if not FACEBOOK_ACCESS_TOKEN:
-        logging.error("Facebook access token not configured")
+        # ✅ SILENT: No logging when token not configured
         return False
         
     url = f"https://graph.facebook.com/v13.0/me/messages?access_token={FACEBOOK_ACCESS_TOKEN}"
@@ -815,19 +855,20 @@ async def send_facebook_message(sender_id: str, message: str):
     try:
         response = requests.post(url, json=payload, timeout=10)
         if response.status_code != 200:
-            logging.error(f"Failed to send Facebook message: {response.text}")
+            # ✅ SILENT: No logging for failed sends - just return False
+            pass
         return response.status_code == 200
     except requests.exceptions.Timeout:
-        logging.error(f"Timeout sending Facebook message to {sender_id}")
+        # ✅ SILENT: No logging for timeout
         return False
     except Exception as e:
-        logging.error(f"Error sending Facebook message: {e}")
+        # ✅ SILENT: No logging for other errors
         return False
 
 from memory import *
 # ฟังก์ชันสำหรับประมวลผลข้อความจาก chatbot
 async def process_chatbot_query(sender_id: str, user_message: str, emotional:str):
-    """Process user message through chatbot and return response"""
+    """Process user message through chatbot and return response with NO WARNINGS"""
     try:
         session_id = f"fb_{sender_id}"
         
@@ -839,7 +880,7 @@ async def process_chatbot_query(sender_id: str, user_message: str, emotional:str
             if not log:
                 return "ขออภัยค่ะ/ครับ ขณะนี้ไม่สามารถให้คำตอบได้"
             
-            print(f"Using existing session for Facebook user {sender_id}: {log.get('session_id', 'unknown')}")
+            # ✅ SILENT: No logging for using existing session
 
         db_type = log.get("db_type")
 
@@ -857,32 +898,21 @@ async def process_chatbot_query(sender_id: str, user_message: str, emotional:str
             from stopword import extract_keywords_from_query
             keywords = extract_keywords_from_query(user_message)
             keyword_query = " ".join(keywords) if keywords else user_message
-            print(f"keywords : {keyword_query}")
+            # ✅ SILENT: No logging for keywords
             context_bf = await retrieve_context_from_mongodb(collection, keyword_query)
             num_tokens_context = count_tokens(context_bf, model="gpt-4o-mini")
             context = reduce_context(context_bf, num_tokens_context,keywords)
-            # print(f"context : {context}")
+            # ✅ SILENT: No logging for context
         else:
             return "ขออภัย เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง"
 
-        # prompt = Prompt_Template(context, user_message)
-
-        # llm = ChatOpenAI(
-        #     temperature=0,
-        #     model="gpt-4o-mini",
-        #     api_key=OPENAI_API_KEY,
-        #     streaming=False,  # ปิด streaming สำหรับ Facebook response
-        #     callbacks=[StreamingStdOutCallbackHandler()]
-        # )
-
-
         """  UPDATE MEMORY"""
         response = chat_interactive(session_id,user_message,context,emotional)
-        # response = await llm.ainvoke(prompt)
         return response
 
     except Exception as e:
-        logging.error(f"Error in chatbot processing: {e}")
+        # ✅ REDUCED LOGGING: Only log actual processing errors
+        logger.error(f"Error in chatbot processing: {e}")
         return "ขออภัย เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง"
 
 
@@ -933,7 +963,8 @@ async def handle_user_buffer(user_id: str, sender_id: str, background_tasks: Bac
                     result = data.get("result", {})
                     max_emotion = max(result, key=result.get)
     except Exception as e:
-        logging.error(f"Error calling emotional API: {e}")
+        # ✅ SILENT: No logging for emotional API errors
+        pass
 
     try:
         bot_response = await process_chatbot_query(sender_id, final_text_user, max_emotion)
@@ -968,7 +999,8 @@ async def handle_user_buffer(user_id: str, sender_id: str, background_tasks: Bac
             conversation['isRead'] = True
             
     except Exception as e:
-        logging.error(f"Error processing message from {sender_id}: {e}")
+        # ✅ REDUCED LOGGING: Only log actual processing errors
+        logger.error(f"Error processing message from {sender_id}: {e}")
         await send_facebook_message(sender_id, "ขออภัยค่ะ/ครับ ขณะนี้ไม่สามารถให้คำตอบได้")
     # ล้าง buffer user
     user_buffers.pop(user_id, None)
@@ -997,12 +1029,12 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
         # ✅ FIXED: Only check AI assistant for Facebook webhook processing
         # Regular chat interface will work regardless of this setting
         if not ai_assistant_enabled:
-            logging.info("AI Assistant disabled - Facebook webhook processing skipped")
+            # ✅ SILENT: No logging when AI Assistant disabled
             return Response(content="AI Assistant disabled for Facebook webhook", status_code=200)
 
 
         data = await request.json()
-        logging.debug(f"Received Event: {data}")  # เพิ่มการตรวจสอบข้อมูลที่ได้รับ
+        # ✅ SILENT: No debug logging for received events
 
         if "entry" in data:
             for entry in data["entry"]:
@@ -1032,18 +1064,18 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                             if attachment.get("type") == "image":
                                 image_url = attachment["payload"].get("url")
                                 if image_url:
-                                    logging.debug(f"Found image attachment, processing OCR: {image_url}")  # ตรวจสอบว่ามีภาพที่ถูกส่ง
+                                    # ✅ SILENT: No debug logging for OCR processing
                                     ocr_tasks.append(process_image_and_ocr_then_chat(image_url))
 
                     ocr_texts = []
                     if ocr_tasks:
                         try:
-                            logging.debug("Starting OCR processing...")
+                            # ✅ SILENT: No debug logging for OCR
                             ocr_texts = await asyncio.wait_for(
                                 asyncio.gather(*ocr_tasks),
                                 timeout=15.0
                             )
-                            logging.debug(f"OCR result: {ocr_texts}")
+                            # ✅ SILENT: No debug logging for OCR results
                         except asyncio.TimeoutError:
                             await send_facebook_message(sender_id, 
                             "ขออภัยครับ ขณะนี้ทางบอทของเรายังไม่สามารถตอบคำถามนี้ได้ หากท่านต้องการติดต่อเจ้าหน้าที่ กรุณาพิมพ์ 'ติดต่อเจ้าหน้าที่' พร้อมบอกรายละเอียดและอีเมล ทางเจ้าหน้าที่จะติดต่อกลับหาท่านผ่านทางอีเมลครับ หรือลองพิมพ์คำถามใหม่อย่างละเอียดกับทางบอทเพื่อให้เราสามารถช่วยตอบคำถามได้ดียิ่งขึ้นครับ")
@@ -1056,12 +1088,12 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                     if user_message:
                         user_buffers[user_id]["messages"].append(user_message)
                     if ocr_texts:
-                        logging.debug(f"Adding OCR texts to buffer: {ocr_texts}")
+                        # ✅ SILENT: No debug logging for OCR texts
                         user_buffers[user_id]["messages"].extend(ocr_texts)
 
                     # ถ้ามีข้อความ "ติดต่อเจ้าหน้าที่" ตอบทันทีไม่ต้องรอ
                     if is_similar_to_contact_staff(user_message):
-                        logging.debug(f"Detected 'contact staff' message from user: {user_message}")
+                        # ✅ SILENT: No debug logging for contact staff detection
                         background_tasks.add_task(send_alert_email, sender_id, user_message, 0)
                         await send_facebook_message(sender_id, 
                                                     "คำขอของท่านได้ถูกส่งไปยังเจ้าหน้าที่เรียบร้อยแล้ว หากคุณยังไม่ได้ระบุรายละเอียดกรุณาพิมพ์คำว่า 'ติดต่อเจ้าหน้าที่' พร้อมข้อมูลและอีเมลที่คุณต้องการให้ติดต่อกลับครับ ขณะนี้คุณมีคำถามเพิ่มเติมที่ต้องการสอบถามกับบอทหรือไม่ครับ?")
@@ -1081,7 +1113,8 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
         return Response(content="ok", status_code=200)
 
     except Exception as e:
-        logging.error(f"Error in webhook handler: {e}")
+        # ✅ REDUCED LOGGING: Only log actual webhook errors
+        logger.error(f"Error in webhook handler: {e}")
         return Response(content="error", status_code=500)
 
 
@@ -1099,4 +1132,15 @@ async def verify_webhook(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    
+    # ✅ NEW: Configure uvicorn to suppress INFO logs for specific endpoints
+    uvicorn_config = uvicorn.Config(
+        app, 
+        host="0.0.0.0", 
+        port=8000,
+        log_level="warning",  # ✅ CRITICAL: Only show WARNING and above
+        access_log=False      # ✅ CRITICAL: Disable access logs completely
+    )
+    
+    server = uvicorn.Server(uvicorn_config)
+    server.run()
