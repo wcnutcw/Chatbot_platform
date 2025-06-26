@@ -70,6 +70,8 @@ You can get the typhoon api key from https://playground.opentyphoon.ai/api-key
 
 ```uvicorn main:app --reload --port 8000```
 
+## Alternative run frontend 
+
 ## 🖼️ Run Frontend (Streamlit)
 Open a new Terminal:
 ```cd frontend```
