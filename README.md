@@ -70,7 +70,7 @@ TYPHOON_API_URL=https://api.opentyphoon.ai/v1
 ▶️ รัน Backend (FastAPI)
 ```cd main_backend```
 
-```uvicorn main:app --reload --port 8000```
+```uvicorn main:app --host 0.0.0.0 --port 8000 --reload```
 
 ## 🖼️ รัน Frontend (Streamlit)
 เปิด Terminal ใหม่:
