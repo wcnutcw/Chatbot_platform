@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot, Bell, User } from 'lucide-react';
+import { Bell, User } from 'lucide-react';
 
 const Header: React.FC = () => {
   return (
@@ -7,12 +7,24 @@ const Header: React.FC = () => {
       <div className="px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Bot className="w-8 h-8 text-blue-600" />
+            {/* ✅ Custom RaoBotHub Logo */}
+            <div className="flex-shrink-0">
+              <img
+                src="/image.png"
+                alt="RaoBotHub Logo"
+                className="w-10 h-10 rounded-lg object-contain"
+                onError={(e) => {
+                  // Fallback to the second logo if first one fails
+                  const target = e.target as HTMLImageElement;
+                  if (target.src.includes('image.png')) {
+                    target.src = '/71895ade-07e4-4db2-a32a-213fa1a6489e.png';
+                  }
+                }}
+              />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Admin Management</h1>
-              <p className="text-sm text-gray-500">Intelligent chat management system</p>
+              <h1 className="text-xl font-bold text-gray-900">RaoBotHub</h1>
+              <p className="text-sm text-gray-500">แชทบอทที่ตอบโจทย์คนไทย</p>
             </div>
           </div>
 

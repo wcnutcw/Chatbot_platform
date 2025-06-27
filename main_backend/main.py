@@ -898,6 +898,7 @@ async def process_chatbot_query(sender_id: str, user_message: str, emotional:str
             from stopword import extract_keywords_from_query
             keywords = extract_keywords_from_query(user_message)
             keyword_query = " ".join(keywords) if keywords else user_message
+            print(f"keyword: {keyword_query}")
             # ✅ SILENT: No logging for keywords
             context_bf = await retrieve_context_from_mongodb(collection, keyword_query)
             num_tokens_context = count_tokens(context_bf, model="gpt-4o-mini")
