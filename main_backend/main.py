@@ -31,6 +31,7 @@ from datetime import datetime
 from typing import List, Dict
 import traceback
 from similar_word_send_admin import is_similar_to_contact_staff
+from translation_en_th import translation_en_2_th , detect_language , translation_th_2_eng
 import nest_asyncio
 
 current_directory = os.getcwd()
@@ -936,7 +937,7 @@ def remove_middle_spaces(text):
 from typing import Dict
 user_buffers: Dict[str, Dict] = {}    # user_id: {"messages": [], "task": asyncio.Task}
 
-async def handle_user_buffer(user_id: str, sender_id: str, background_tasks: BackgroundTasks):
+async def handle_user_buffer(user_id: str, sender_id: str, detect_message_language,background_tasks: BackgroundTasks):
     await asyncio.sleep(6)  # รอ 6 วิ
     buffer = user_buffers.get(user_id)
     if not buffer or not buffer["messages"]:
@@ -969,6 +970,9 @@ async def handle_user_buffer(user_id: str, sender_id: str, background_tasks: Bac
 
     try:
         bot_response = await process_chatbot_query(sender_id, final_text_user, max_emotion)
+        if detect_message_language=="english"  or detect_message_language=="other":
+            bot_response=translation_th_2_eng(bot_response)
+        print(f"bot_response : {bot_response}")
         await send_facebook_message(sender_id, bot_response)
         
         # Update conversation cache with new message
@@ -1053,8 +1057,12 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                     
                     user_message = messaging_event["message"].get("text", "").strip()
                     attachments = messaging_event["message"].get("attachments", [])
+                    detect_message_language = detect_language(user_message)
+                    if detect_message_language=="english" or detect_message_language=="mixed" or detect_message_language=="other":
+                        user_message=translation_en_2_th(user_message)
                     user_message = remove_middle_spaces(user_message)
                     
+
                     if message_id:
                         mark_message_as_processed(message_id)
 
@@ -1101,13 +1109,13 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                         # เคลียร์ buffer นี้
                         user_buffers.pop(user_id, None)
                         return Response(content="ok", status_code=200)
-
+                    
                     # -- ตั้ง/รีเซต timer task สำหรับ user นี้ --
                     old_task = user_buffers[user_id].get("task")
                     if old_task:
                         old_task.cancel()
                     task = asyncio.create_task(
-                        handle_user_buffer(user_id, sender_id, background_tasks)
+                        handle_user_buffer(user_id, sender_id, detect_message_language,background_tasks)
                     )
                     user_buffers[user_id]["task"] = task
 

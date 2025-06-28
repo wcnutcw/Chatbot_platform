@@ -1,4 +1,4 @@
-from googletrans import Translator
+from deep_translator import GoogleTranslator
 
 def detect_language(word):
     is_thai = False
@@ -15,12 +15,16 @@ def detect_language(word):
     elif is_english and not is_thai:
         return "english"
     elif is_thai and is_english:
-        return "thai"
+        return "mixed"
     else:
         return "other"
     
-def translation(text):
-    translator = Translator()
-    result = translator.translate(text, src="th", dest="en")
-    print(f"translation : {result.text}")
-    return result.text
+def translation_en_2_th(text, source='en', target='th'):
+    result=GoogleTranslator(source=source, target=target).translate(text)
+    print(f"translation : {result}")
+    return result
+
+def translation_th_2_eng(text, source='th', target='en'):
+    result=GoogleTranslator(source=source, target=target).translate(text)
+    print(f"translation : {result}")
+    return result

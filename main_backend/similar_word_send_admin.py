@@ -4,7 +4,8 @@ from sentence_transformers import SentenceTransformer, util
 model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
 
 target_phrases = [
-    "ติดต่อเจ้าหน้าที่"
+    "ติดต่อเจ้าหน้าที่",
+    "Contact staff"
 ]
 target_embeddings = model.encode(target_phrases, convert_to_tensor=True)
 

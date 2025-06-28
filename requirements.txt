@@ -203,4 +203,4 @@ xxhash==3.5.0
 yarl==1.20.0
 zope.interface==7.2
 zstandard==0.23.0
-googletrans==4.0.0-rc1
+deep-translator==1.11.4
