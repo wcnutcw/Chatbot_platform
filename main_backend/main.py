@@ -31,7 +31,7 @@ from datetime import datetime
 from typing import List, Dict
 import traceback
 from similar_word_send_admin import is_similar_to_contact_staff
-from translation_en_th import translation_en_2_th , detect_language , translation_th_2_eng
+from translation_en_th import translation_en_2_th , detect_language_str , translation_th_2_eng , detect_language_list
 import nest_asyncio
 
 current_directory = os.getcwd()
@@ -1059,7 +1059,7 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                     attachments = messaging_event["message"].get("attachments", [])
                     detect_message_language = "thai" 
                     if user_message:
-                        detect_message_language = detect_language(user_message)
+                        detect_message_language = detect_language_str(user_message)
                         # if detect_message_language =="english":
                         #     user_message=translation_en_2_th(user_message)
                         if detect_message_language == "other":
@@ -1121,8 +1121,8 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                         combined_text = " ".join(buffer["messages"])
                         combined_text_list = [combined_text]
                         print(f"combine : {combined_text_list}")
-                        detect_message_language=detect_language(combined_text_list)
-                        print(f"detct_lang: {detect_message_language}")
+                    detect_message_language=detect_language_list(combined_text_list)
+                    print(f"detct_lang: {detect_message_language}")
                     print(f"message : {buffer["messages"]}")
                     # -- ตั้ง/รีเซต timer task สำหรับ user นี้ --
                     old_task = user_buffers[user_id].get("task")
