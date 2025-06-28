@@ -970,7 +970,7 @@ async def handle_user_buffer(user_id: str, sender_id: str, detect_message_langua
 
     try:
         bot_response = await process_chatbot_query(sender_id, final_text_user, max_emotion)
-        if detect_message_language=="english"  or detect_message_language=="other":
+        if detect_message_language in ["english", "mixed", "other"]:
             bot_response=translation_th_2_eng(bot_response)
         print(f"bot_response : {bot_response}")
         await send_facebook_message(sender_id, bot_response)
@@ -1057,9 +1057,11 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                     
                     user_message = messaging_event["message"].get("text", "").strip()
                     attachments = messaging_event["message"].get("attachments", [])
-                    detect_message_language = detect_language(user_message)
-                    if detect_message_language=="english" or detect_message_language=="mixed" or detect_message_language=="other":
-                        user_message=translation_en_2_th(user_message)
+                    detect_message_language = "thai" 
+                    if user_message:
+                        detect_message_language = detect_language(user_message)
+                        if detect_message_language in ["english", "mixed", "other"]:
+                            user_message=translation_en_2_th(user_message)
                     user_message = remove_middle_spaces(user_message)
                     
 
