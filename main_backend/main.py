@@ -970,7 +970,7 @@ async def handle_user_buffer(user_id: str, sender_id: str, detect_message_langua
 
     try:
         bot_response = await process_chatbot_query(sender_id, final_text_user, max_emotion)
-        if detect_message_language in ["english", "mixed", "other"]:
+        if detect_message_language =="english":
             bot_response=translation_th_2_eng(bot_response)
         print(f"bot_response : {bot_response}")
         await send_facebook_message(sender_id, bot_response)
@@ -1060,8 +1060,12 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                     detect_message_language = "thai" 
                     if user_message:
                         detect_message_language = detect_language(user_message)
-                        if detect_message_language in ["english", "mixed", "other"]:
-                            user_message=translation_en_2_th(user_message)
+                        # if detect_message_language =="english":
+                        #     user_message=translation_en_2_th(user_message)
+                        if detect_message_language == "other":
+                             await send_facebook_message(sender_id, 
+                            "Sorry, our chatbot currently only supports Thai and English. Please ask your questions in Thai or English.")
+                             return Response(content="ok", status_code=200)
                     user_message = remove_middle_spaces(user_message)
                     
 
@@ -1086,6 +1090,7 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                                 asyncio.gather(*ocr_tasks),
                                 timeout=15.0
                             )
+                            print(f"ocr_texts:{ocr_texts}")
                             # ✅ SILENT: No debug logging for OCR results
                         except asyncio.TimeoutError:
                             await send_facebook_message(sender_id, 
@@ -1105,13 +1110,20 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                     # ถ้ามีข้อความ "ติดต่อเจ้าหน้าที่" ตอบทันทีไม่ต้องรอ
                     if is_similar_to_contact_staff(user_message):
                         # ✅ SILENT: No debug logging for contact staff detection
-                        background_tasks.add_task(send_alert_email, sender_id, user_message, 0)
+                        background_tasks.add_task(send_alert_email, sender_id, user_message)
                         await send_facebook_message(sender_id, 
                                                     "คำขอของท่านได้ถูกส่งไปยังเจ้าหน้าที่เรียบร้อยแล้ว หากคุณยังไม่ได้ระบุรายละเอียดกรุณาพิมพ์คำว่า 'ติดต่อเจ้าหน้าที่' พร้อมข้อมูลและอีเมลที่คุณต้องการให้ติดต่อกลับครับ ขณะนี้คุณมีคำถามเพิ่มเติมที่ต้องการสอบถามกับบอทหรือไม่ครับ?")
                         # เคลียร์ buffer นี้
                         user_buffers.pop(user_id, None)
                         return Response(content="ok", status_code=200)
-                    
+                    buffer = user_buffers.get(user_id)
+                    if buffer["messages"]:
+                        combined_text = " ".join(buffer["messages"])
+                        combined_text_list = [combined_text]
+                        print(f"combine : {combined_text_list}")
+                        detect_message_language=detect_language(combined_text_list)
+                        print(f"detct_lang: {detect_message_language}")
+                    print(f"message : {buffer["messages"]}")
                     # -- ตั้ง/รีเซต timer task สำหรับ user นี้ --
                     old_task = user_buffers[user_id].get("task")
                     if old_task:
