@@ -57,17 +57,71 @@ facebook_logger.setLevel(logging.ERROR)  # Only show errors, not warnings
 last_facebook_log_time = None
 FACEBOOK_LOG_INTERVAL = 300  # Only log Facebook API calls every 5 minutes (300 seconds)
 
-# Environment variables
+# ✅ Enhanced Environment Manager Integration
+enhanced_env_manager = None
+try:
+    from enhanced_environment_manager import EnhancedEnvironmentManager
+    enhanced_env_manager = EnhancedEnvironmentManager()
+    logger.info("Enhanced Environment Manager loaded successfully")
+    
+    # Try to sync active configuration on startup
+    try:
+        active_config = enhanced_env_manager.get_active_configuration()
+        if active_config:
+            enhanced_env_manager.sync_to_env_file(active_config["variables"])
+            load_dotenv(dotenv_path=env_path, override=True)
+            logger.info(f"Synced active configuration '{active_config['name']}' on startup")
+    except Exception as sync_error:
+        logger.warning(f"Could not sync active configuration on startup: {sync_error}")
+        
+except ImportError:
+    logger.info("Enhanced Environment Manager not available, using standard .env file")
+except Exception as e:
+    logger.warning(f"Could not initialize Enhanced Environment Manager: {e}")
+
+# Environment variables with your specified values
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017/")
+MONGO_URL = os.getenv("MONGO_URL")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_ENV = os.getenv("PINECONE_ENV")
-EMBEDDING_MODEL = os.getenv("EMBEDDING")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
+HF_TOKEN = os.getenv("HF_TOKEN")
+TYPHOON_API_KEY = os.getenv("TYPHOON_API_KEY")
+TYPHOON_API_URL = os.getenv("TYPHOON_API_URL", "https://api.opentyphoon.ai/v1")
 FACEBOOK_ACCESS_TOKEN = os.getenv("FACEBOOK_ACCESS_TOKEN")
-EMAIL_ADMIN = os.getenv("EMAIL_ADMIN")
-EMAIL_PASS = os.getenv("EMAIL_PASS")
-url_emotional = os.getenv("url_emotional")
+PATHUMMALLM_API = os.getenv("PATHUMMALLM_API")
+url_emotional = os.getenv("url_emotional", "https://api.aiforthai.in.th/emonews/prediction")
 api_key_aiforthai_emotional = os.getenv("api_key_aiforthai_emotional")
+EMAIL_ADMIN = os.getenv("EMAIL_ADMIN", "wcnnut123@gmail.com")
+EMAIL_PASS = os.getenv("EMAIL_PASS", "kbqm tozs bxoh dyzw")
+
+# ✅ Function to reload environment variables dynamically
+def reload_environment_variables():
+    """Reload all environment variables from the .env file"""
+    global OPENAI_API_KEY, MONGO_URL, PINECONE_API_KEY, PINECONE_ENV, EMBEDDING_MODEL
+    global HF_TOKEN, TYPHOON_API_KEY, TYPHOON_API_URL, FACEBOOK_ACCESS_TOKEN
+    global PATHUMMALLM_API, url_emotional, api_key_aiforthai_emotional, EMAIL_ADMIN, EMAIL_PASS
+    
+    # Reload .env file
+    load_dotenv(dotenv_path=env_path, override=True)
+    
+    # Update all global variables
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", OPENAI_API_KEY)
+    MONGO_URL = os.getenv("MONGO_URL", MONGO_URL)
+    PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", PINECONE_API_KEY)
+    PINECONE_ENV = os.getenv("PINECONE_ENV", PINECONE_ENV)
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", EMBEDDING_MODEL)
+    HF_TOKEN = os.getenv("HF_TOKEN", HF_TOKEN)
+    TYPHOON_API_KEY = os.getenv("TYPHOON_API_KEY", TYPHOON_API_KEY)
+    TYPHOON_API_URL = os.getenv("TYPHOON_API_URL", TYPHOON_API_URL)
+    FACEBOOK_ACCESS_TOKEN = os.getenv("FACEBOOK_ACCESS_TOKEN", FACEBOOK_ACCESS_TOKEN)
+    PATHUMMALLM_API = os.getenv("PATHUMMALLM_API", PATHUMMALLM_API)
+    url_emotional = os.getenv("url_emotional", url_emotional)
+    api_key_aiforthai_emotional = os.getenv("api_key_aiforthai_emotional", api_key_aiforthai_emotional)
+    EMAIL_ADMIN = os.getenv("EMAIL_ADMIN", EMAIL_ADMIN)
+    EMAIL_PASS = os.getenv("EMAIL_PASS", EMAIL_PASS)
+    
+    logger.info("Environment variables reloaded successfully")
 
 # MongoDB setup
 mongo_client = MongoClient(MONGO_URL)
@@ -120,6 +174,160 @@ def clean_text(text):
 @app.get("/")
 async def root():
     return {"message": "AI Assistant Backend API", "status": "running"}
+
+# ✅ Enhanced Environment Management API Endpoints
+@app.get("/environment/info")
+async def get_environment_info():
+    """Get current environment information"""
+    try:
+        if enhanced_env_manager:
+            info = enhanced_env_manager.get_environment_info()
+            return {"info": info}
+        else:
+            # Fallback info when enhanced manager is not available
+            env_vars = {}
+            if env_path.exists():
+                with open(env_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#') and '=' in line:
+                            key, value = line.split('=', 1)
+                            env_vars[key.strip()] = value.strip('"\'')
+            
+            return {
+                "info": {
+                    "active_configuration": None,
+                    "total_configurations": 0,
+                    "env_file": {
+                        "path": str(env_path),
+                        "exists": env_path.exists(),
+                        "variables_count": len(env_vars)
+                    },
+                    "sync_status": {
+                        "in_sync": True,
+                        "active_config_vars": 0,
+                        "env_file_vars": len(env_vars)
+                    }
+                }
+            }
+    except Exception as e:
+        logger.error(f"Error getting environment info: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+@app.get("/environment/configurations")
+async def get_all_configurations():
+    """Get all environment configurations"""
+    try:
+        if enhanced_env_manager:
+            configurations = enhanced_env_manager.get_all_configurations()
+            return {"configurations": configurations}
+        else:
+            return {"configurations": [], "message": "Enhanced environment manager not available"}
+    except Exception as e:
+        logger.error(f"Error getting configurations: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+@app.get("/environment/configurations/{config_id}")
+async def get_configuration(config_id: str):
+    """Get a specific configuration"""
+    try:
+        if enhanced_env_manager:
+            configuration = enhanced_env_manager.get_configuration(config_id)
+            if configuration:
+                return {"configuration": configuration}
+            else:
+                return JSONResponse(content={"error": "Configuration not found"}, status_code=404)
+        else:
+            return JSONResponse(content={"error": "Enhanced environment manager not available"}, status_code=503)
+    except Exception as e:
+        logger.error(f"Error getting configuration {config_id}: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+@app.post("/environment/configurations")
+async def create_configuration(request: Request):
+    """Create a new environment configuration"""
+    try:
+        if not enhanced_env_manager:
+            return JSONResponse(content={"error": "Enhanced environment manager not available"}, status_code=503)
+        
+        data = await request.json()
+        name = data.get("name")
+        description = data.get("description", "")
+        variables = data.get("variables", {})
+        
+        if not name:
+            return JSONResponse(content={"error": "Configuration name is required"}, status_code=400)
+        
+        configuration = enhanced_env_manager.create_configuration(name, description, variables)
+        return {"configuration": configuration}
+        
+    except ValueError as e:
+        return JSONResponse(content={"error": str(e)}, status_code=400)
+    except Exception as e:
+        logger.error(f"Error creating configuration: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+@app.put("/environment/configurations/{config_id}")
+async def update_configuration(config_id: str, request: Request):
+    """Update an existing configuration"""
+    try:
+        if not enhanced_env_manager:
+            return JSONResponse(content={"error": "Enhanced environment manager not available"}, status_code=503)
+        
+        data = await request.json()
+        variables = data.get("variables", {})
+        name = data.get("name")
+        description = data.get("description")
+        
+        success = enhanced_env_manager.update_configuration(config_id, variables, name, description)
+        if success:
+            # Reload environment variables if this was the active configuration
+            reload_environment_variables()
+            return {"message": "Configuration updated successfully"}
+        else:
+            return JSONResponse(content={"error": "Failed to update configuration"}, status_code=400)
+            
+    except ValueError as e:
+        return JSONResponse(content={"error": str(e)}, status_code=400)
+    except Exception as e:
+        logger.error(f"Error updating configuration {config_id}: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+@app.post("/environment/configurations/{config_id}/activate")
+async def activate_configuration(config_id: str):
+    """Activate a configuration"""
+    try:
+        if not enhanced_env_manager:
+            return JSONResponse(content={"error": "Enhanced environment manager not available"}, status_code=503)
+        
+        success = enhanced_env_manager.activate_configuration(config_id)
+        if success:
+            # Reload environment variables after activation
+            reload_environment_variables()
+            return {"message": "Configuration activated successfully"}
+        else:
+            return JSONResponse(content={"error": "Failed to activate configuration"}, status_code=400)
+            
+    except Exception as e:
+        logger.error(f"Error activating configuration {config_id}: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+@app.delete("/environment/configurations/{config_id}")
+async def delete_configuration(config_id: str):
+    """Delete a configuration"""
+    try:
+        if not enhanced_env_manager:
+            return JSONResponse(content={"error": "Enhanced environment manager not available"}, status_code=503)
+        
+        success = enhanced_env_manager.delete_configuration(config_id)
+        if success:
+            return {"message": "Configuration deleted successfully"}
+        else:
+            return JSONResponse(content={"error": "Failed to delete configuration"}, status_code=400)
+            
+    except Exception as e:
+        logger.error(f"Error deleting configuration {config_id}: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 # MongoDB connection endpoints - exactly like app.py behavior
 @app.post("/mongodb/test-connection")
@@ -1090,7 +1298,6 @@ async def receive_message(request: Request, background_tasks: BackgroundTasks):
                                 asyncio.gather(*ocr_tasks),
                                 timeout=15.0
                             )
-                            print(f"ocr_texts:{ocr_texts}")
                             # ✅ SILENT: No debug logging for OCR results
                         except asyncio.TimeoutError:
                             await send_facebook_message(sender_id, 
