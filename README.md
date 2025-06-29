@@ -106,7 +106,7 @@ TYPHOON_API_URL=https://api.opentyphoon.ai/v1
 ## วิธี Run DOCKER 
 ```docker run -d -p 5000:5000 -e OPENAI_API_KEY="your-openai-api-key-here" chatbot_ai_platform```
 
-## ติดตั้ง model PythaiNLP ด้วย ของ โมเดลภาษาอังกฤษ 
+## อย่าลืม! ติดตั้ง model PythaiNLP ด้วย ของ โมเดลภาษาอังกฤษ 
 ```python -m spacy download en_core_web_sm```
 
 ## 🙋‍♂️ ติดต่อ
