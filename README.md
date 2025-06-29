@@ -59,19 +59,28 @@ PINECONE_API_KEY=your_pinecone_api_key
 PINECONE_ENV=your_pinecone_environment
 EMBEDDING=embedding_model_name_from_openai
 FACEBOOK_ACCESS_TOKEN = TOKEN_API_FACEBOOK
-HF_TOKEN=your_huggingface_token</pre>
+HF_TOKEN=your_huggingface_token
+TYPHOON_API_KEY=your_key
+TYPHOON_API_URL=https://api.opentyphoon.ai/v1
+</pre>
+
+สามารถรับ api key ของ typhoon ได้จาก https://playground.opentyphoon.ai/api-key
 
 ## 🧪 วิธีรันโปรเจกต์
 ▶️ รัน Backend (FastAPI)
 ```cd main_backend```
 
-```uvicorn main:app --reload --port 8000```
+```uvicorn main:app --host 0.0.0.0 --port 8000 --reload```
 
 ## 🖼️ รัน Frontend (Streamlit)
 เปิด Terminal ใหม่:
-```cd fontend```
+```cd frontend```
 
 ```streamlit run app.py```
+## 🖼️ รัน Frontend (Prototype)
+```cd frontend```
+
+```npm run dev```
 
 ## 🛠️ แก้ไขปัญหาที่พบบ่อย
 🔄 อัปเดต / ติดตั้งใหม่

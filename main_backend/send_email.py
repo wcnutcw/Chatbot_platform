@@ -1,6 +1,7 @@
 from datetime import datetime
 from email.message import EmailMessage
 import os
+from zoneinfo import ZoneInfo
 
 current_directory = os.getcwd()
 print("Current Directory:", current_directory) 
@@ -23,8 +24,9 @@ EMAIL_PASS = os.getenv("EMAIL_PASS")
 
 
 # SEND EMAIL
-def send_alert_email(fb_id: str, message: str, timestamp: int):
-    dt = datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
+def send_alert_email(fb_id: str, message: str):
+    tz = ZoneInfo("Asia/Bangkok")
+    dt = datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')
 
     user_name = get_facebook_user_name(fb_id, FACEBOOK_ACCESS_TOKEN)
     

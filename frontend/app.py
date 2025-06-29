@@ -7,30 +7,45 @@ from dotenv import load_dotenv
 from pathlib import Path
 import logging
 
+# ตั้งค่าตำแหน่งของไฟล์ .env สำหรับโหลดตัวแปรสภาพแวดล้อม
 current_directory = os.getcwd()
-print("Current Directory:", current_directory)
-
 env_path = Path(current_directory).parent / 'venv' / '.env'
-print("Env Path:", env_path)
-load_dotenv()
+load_dotenv(dotenv_path=env_path)
 
-st.title("📂 Upload your files and Ask Questions!")
+# แสดงหัวข้อของหน้า
+st.title("📂 Backend management UI")
 
-db_type = st.selectbox("Select Database Type", ["MongoDB", "Pinecone"])
+# สร้าง toggle switch
+enabled = st.toggle("เปิดใช้งาน AI Assistant", value=st.session_state.get("ai_assistant_enabled", False))
 
+# ตรวจสอบว่าค่ามีการเปลี่ยนแปลงไหม
+if enabled != st.session_state.get("ai_assistant_enabled", False):
+    st.session_state.ai_assistant_enabled = enabled
+    try:
+        res = requests.post("http://localhost:8000/toggle_switch", json={"enable": enabled})
+        if res.status_code == 200:
+            st.success(f"สถานะ AI Assistant ถูก {'เปิดใช้งาน' if enabled else 'ปิดใช้งาน'}")
+        else:
+            st.error(f"ไม่สามารถอัปเดตสถานะ AI Assistant: {res.text}")
+    except Exception as e:
+        st.error(f"เกิดข้อผิดพลาดในการอัปเดตสถานะ AI Assistant: {e}")
+
+# เลือกประเภทฐานข้อมูล
+db_type = st.selectbox("เลือกประเภทฐานข้อมูล", ["MongoDB", "Pinecone"], key="db_type_selectbox")
+
+# ตัวแปรสำหรับจัดการเซสชัน
 session_ready = False
 show_file_uploader = True
-
 index_name = None
 namespace = None
 db_name = None
 collection_name = None
 
-# Load env for emotional analysis
+# โหลดข้อมูลสำหรับการวิเคราะห์อารมณ์
 url_emotional = os.getenv("url_emotional")
 api_key_aiforthai_emotional = os.getenv("api_key_aiforthai_emotional")
 
-# MongoDB section
+# การตั้งค่า MongoDB
 mongo_action_labels = {
     "เลือกข้อมูลที่มีอยู่แล้ว": "เลือกข้อมูลที่มีอยู่แล้ว",
     "สร้างที่จัดเก็บข้อมูลใหม่": "สร้างที่จัดเก็บข้อมูลใหม่",
@@ -70,12 +85,12 @@ if db_type == "MongoDB":
             show_file_uploader = True
 
     except Exception as e:
-        st.error(f"Cannot connect to MongoDB: {e}")
+        st.error(f"ไม่สามารถเชื่อมต่อกับ MongoDB: {e}")
         db_name = None
         collection_name = None
         show_file_uploader = True
 
-# Pinecone section
+# การตั้งค่า Pinecone
 elif db_type == "Pinecone":
     PINECONE_API_KEY = st.text_input("Pinecone API Key:", type="password")
     PINECONE_ENV = st.text_input("Pinecone Environment:", value="us-west1-gcp")
@@ -94,7 +109,7 @@ elif db_type == "Pinecone":
             pinecone.init(api_key=PINECONE_API_KEY, environment=PINECONE_ENV)
             indexes = pinecone.list_indexes()
         except Exception as e:
-            st.error(f"Error connecting to Pinecone: {e}")
+            st.error(f"เกิดข้อผิดพลาดในการเชื่อมต่อกับ Pinecone: {e}")
             indexes = []
 
     if create_new_pinecone == "เลือกข้อมูลที่มีอยู่แล้ว":
@@ -102,7 +117,7 @@ elif db_type == "Pinecone":
             index_name = st.selectbox("เลือก Pinecone Index:", indexes)
             show_file_uploader = False
         else:
-            st.warning("No Pinecone indexes found in your account.")
+            st.warning("ไม่พบ Pinecone indexes ในบัญชีของคุณ.")
             index_name = None
             show_file_uploader = True
     else:
@@ -111,17 +126,17 @@ elif db_type == "Pinecone":
 
     namespace = st.text_input("Pinecone Namespace:", value="default-namespace")
 
-# File uploader
+# ฟังก์ชันอัปโหลดไฟล์
 if show_file_uploader:
     uploaded_files = st.file_uploader(
-        "Upload files (PDF, Word)",
+        "อัปโหลดไฟล์ (PDF, Word)",
         type=["pdf", "docx"],
         accept_multiple_files=True
     )
 else:
     uploaded_files = None
 
-# Upsert for MongoDB
+# การอัปเดตข้อมูลใน MongoDB
 if db_type == "MongoDB" and action == "อัพเดตข้อมูลเพิ่มเติม" and uploaded_files:
     if st.button("Upload and Upsert Files"):
         multipart_files = [
@@ -134,11 +149,11 @@ if db_type == "MongoDB" and action == "อัพเดตข้อมูลเ�
         }
         res = requests.post("http://localhost:8000/upsert", files=multipart_files, data=data)
         if res.status_code == 200:
-            st.success("Upsert completed successfully.")
+            st.success("การอัปเดตข้อมูลเสร็จสมบูรณ์")
         else:
-            st.error(f"Upsert failed: {res.status_code} - {res.text}")
+            st.error(f"ไม่สามารถอัปเดตข้อมูล: {res.status_code} - {res.text}")
 
-# Start Query Session
+# เริ่มต้นเซสชันการค้นหา
 if (not uploaded_files) or (not show_file_uploader):
     if db_type == "MongoDB" and action == "เลือกข้อมูลที่มีอยู่แล้ว":
         if db_name and collection_name:
@@ -151,10 +166,10 @@ if (not uploaded_files) or (not show_file_uploader):
                 res = requests.post("http://localhost:8000/start_session", data=data)
                 if res.status_code == 200:
                     st.session_state.session_id = res.json()["session_id"]
-                    st.success("Session started! You can now ask questions.")
+                    st.success("เซสชันเริ่มต้น! คุณสามารถถามคำถามได้แล้ว")
                     session_ready = True
                 else:
-                    st.error(f"Failed to start session: {res.status_code} {res.text}")
+                    st.error(f"ไม่สามารถเริ่มต้นเซสชันได้: {res.status_code} {res.text}")
         else:
             st.info("กรุณาเลือกหรือกรอกชื่อฐานข้อมูลและคอลเลกชั่น MongoDB")
 
@@ -169,56 +184,16 @@ if (not uploaded_files) or (not show_file_uploader):
                 res = requests.post("http://localhost:8000/start_session", data=data)
                 if res.status_code == 200:
                     st.session_state.session_id = res.json()["session_id"]
-                    st.success("Session started! You can now ask questions.")
+                    st.success("เซสชันเริ่มต้น! คุณสามารถถามคำถามได้แล้ว")
                     session_ready = True
                 else:
-                    st.error(f"Failed to start session: {res.status_code} {res.text}")
+                    st.error(f"ไม่สามารถเริ่มต้นเซสชันได้: {res.status_code} {res.text}")
         else:
-            st.info("Please select or enter a Pinecone index name.")
+            st.info("กรุณาเลือกหรือลองใส่ชื่อ Pinecone index")
 
-# Upload and process (first time)
-if show_file_uploader and uploaded_files and not (db_type == "MongoDB" and action == "อัพเดตข้อมูลเพิ่มเติม"):
-    if st.button("Upload and Process Files"):
-        multipart_files = [
-            ("files", (file.name, file.getvalue())) for file in uploaded_files
-        ]
-
-        data = {"db_type": db_type}
-        if db_type == "MongoDB":
-            if not db_name or not collection_name:
-                st.error("กรุณาเลือกหรือกรอกชื่อฐานข้อมูลและคอลเลกชั่น MongoDB")
-                st.stop()
-            data.update({
-                "db_name": db_name,
-                "collection_name": collection_name
-            })
-
-        elif db_type == "Pinecone":
-            if not index_name:
-                st.error("Please select or enter a Pinecone index name.")
-                st.stop()
-            data.update({
-                "index_name": index_name,
-                "namespace": namespace
-            })
-
-        res = requests.post(
-            "http://localhost:8000/upload",
-            files=multipart_files,
-            data=data
-        )
-
-        if res.status_code == 200:
-            session_id = res.json()["session_id"]
-            st.session_state.session_id = session_id
-            st.success("Files uploaded successfully! Session ready.")
-            session_ready = True
-        else:
-            st.error(f"Upload failed. Status code: {res.status_code}, Response: {res.text}")
-
-# Question section
+# ส่วนการถามคำถาม
 if "session_id" in st.session_state or session_ready:
-    question = st.text_input("Ask a question about your data:")
+    question = st.text_input("ถามคำถามเกี่ยวกับข้อมูลของคุณ:")
 
     max_emotion = ""
     if question:
@@ -233,9 +208,9 @@ if "session_id" in st.session_state or session_ready:
                     result = data.get("result", {})
                     max_emotion = max(result, key=result.get)
         except Exception as e:
-            logging.error(f"Error calling emotional API: {e}")
+            logging.error(f"เกิดข้อผิดพลาดในการเรียก API อารมณ์: {e}")
 
-    if st.button("Ask"):
+    if st.button("ถาม"):
         res = requests.post(
             "http://localhost:8000/query",
             params={
@@ -245,7 +220,7 @@ if "session_id" in st.session_state or session_ready:
             }
         )
         if res.status_code == 200:
-            st.write("Answer:")
+            st.write("คำตอบ:")
             st.success(res.json()["response"])
         else:
-            st.error("Query failed.")
+            st.error("การถามคำถามล้มเหลว.")
