@@ -2,7 +2,7 @@ import numpy as np
 import tiktoken
 from sklearn.decomposition import PCA
 
-openai_tokenizer = tiktoken.encoding_for_model("text-embedding-3-small")
+openai_tokenizer = tiktoken.encoding_for_model("text-embedding-3-large")
 
 def reduce_vector_dimension(vec, target_dim, pca_energy=None):
     """
@@ -56,9 +56,10 @@ def reduce_token_with_openai(text, max_tokens=512):
         tokens = tokens[:max_tokens]
     return openai_tokenizer.decode(tokens)
 
-async def retrieve_context_from_mongodb(collection, question: str, top_k: int = 5, embedding_model="text-embedding-3-small"):
+async def retrieve_context_from_mongodb(collection, question: str, top_k: int = 4, embedding_model="text-embedding-3-large"):
     from openai import AsyncOpenAI
     client = AsyncOpenAI()
+    # print(f"question{question}")
     response = await client.embeddings.create(model=embedding_model, input=[question])
     question_vector = np.array([response.data[0].embedding])
     print(f"Question vector shape: {question_vector.shape}")

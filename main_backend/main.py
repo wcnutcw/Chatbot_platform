@@ -1117,6 +1117,7 @@ async def process_chatbot_query(sender_id: str, user_message: str, emotional:str
             return "ขออภัย เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่อีกครั้ง"
 
         """  UPDATE MEMORY"""
+        # print(f"context : {context}")
         response = chat_interactive(session_id,user_message,context,emotional)
         return response
 
