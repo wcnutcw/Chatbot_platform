@@ -93,19 +93,19 @@ def embed_clip_images(images_b64):
             print(f"❌ ไม่สามารถประมวลผลรูปภาพ {idx+1}: {e}")
     return embeddings
 
-def clean_text_for_embed(text):
-    """
-    ฟังก์ชันนี้ใช้ในการทำความสะอาดข้อความโดยลบข้อมูลที่ไม่จำเป็น เช่น header, footer, หรือ metadata
-    """
-    if not isinstance(text, str):
-        text = str(text)
-    text = text.replace("\n", " ").replace("\r", " ")
+# def clean_text_for_embed(text):
+#     """
+#     ฟังก์ชันนี้ใช้ในการทำความสะอาดข้อความโดยลบข้อมูลที่ไม่จำเป็น เช่น header, footer, หรือ metadata
+#     """
+#     if not isinstance(text, str):
+#         text = str(text)
+#     text = text.replace("\n", " ").replace("\r", " ")
     
-    # กรองคำที่ไม่เกี่ยวข้อง เช่น metadata หรือหัวข้อที่ไม่จำเป็น
-    for noise in ["page:", "หน้า", "Page", "ข้อ:", "row:", "metadata:", "file:"]:
-        if text.lower().startswith(noise):
-            text = text[len(noise):].strip()
-    return text.strip()
+#     # กรองคำที่ไม่เกี่ยวข้อง เช่น metadata หรือหัวข้อที่ไม่จำเป็น
+#     for noise in ["page:", "หน้า", "Page", "ข้อ:", "row:", "metadata:", "file:"]:
+#         if text.lower().startswith(noise):
+#             text = text[len(noise):].strip()
+#     return text.strip()
 
 async def embed_result_all(result, embed_model):
     combined_text_list = []

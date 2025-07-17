@@ -826,6 +826,8 @@ async def upload_files(
             df = pd.DataFrame({"page": result_file["pages"]})
         elif "paragraphs" in result_file and result_file["paragraphs"]:
             df = pd.DataFrame({"paragraph": result_file["paragraphs"]})
+        elif "images_b64" in result_file and result_file["paragraphs"]:
+            df = pd.DataFrame({"images_b64": result_file["images_b64"]})
         else:
             return JSONResponse(content={"error": "No valid text data found"}, status_code=400)
 
