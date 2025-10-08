@@ -1,61 +1,65 @@
-## Architecture
-![Uploading image.png…]()
+## 🧩 Architecture
+![CHEESE!](Screenshot 2025-10-08 113040.png)
 
 
-## 🧠 การใช้ Long-Term Memory (LTM) ในโปรเจกต์นี้
-โปรเจกต์นี้รองรับ Long-Term Memory (LTM) เพื่อให้ AI สามารถ “จำ” หรือ “อ้างอิง” บทสนทนา/ข้อมูลจากอดีตได้อย่างแม่นยำ (เช่น การสนทนาเดิม, ข้อมูลในฐานข้อมูล, เอกสารที่ฝังใน Vector Store ฯลฯ) ซึ่งช่วยให้ระบบตอบสนองได้ชาญฉลาดและมีความต่อเนื่อง
+## 🧠 Long-Term Memory (LTM) Usage in This Project
+This project supports Long-Term Memory (LTM), enabling the AI to “remember” and reference previous conversations or data (e.g., past chats, database entries, or vectorized documents).
+This allows the system to deliver more intelligent, context-aware, and continuous responses.
 
-## 💡 LTM คืออะไร?
-Long-Term Memory ในที่นี้คือ การเก็บรักษาข้อมูลสำคัญระยะยาว (เช่น บทสนทนา, ข้อความ, reference, embeddings) ลงในฐานข้อมูล เช่น MongoDB หรือ Pinecone เพื่อเรียกใช้งานซ้ำและเชื่อมโยงความรู้เดิมกับสิ่งที่ AI กำลังโต้ตอบ
+## 💡 What Is LTM?
+Long-Term Memory refers to storing important data for long-term use — such as chat histories, text content, references, or embeddings — in databases like MongoDB or Pinecone.
+This makes it possible to retrieve and use old information when generating new responses.
 
 ## 🛠️ วิธีใช้งาน LTM ในโปรเจกต์นี้
-1. เตรียม Environment ให้พร้อม
-ต้องกำหนด Environment Variables ให้ถูกต้อง (MONGO_URL, PINECONE_API_KEY ฯลฯ)
+1. Environment Setup
+You must configure environment variables correctly (MONGO_URL, PINECONE_API_KEY, etc.).
+See the “Getting Started” section below for more details.
 
-ดูรายละเอียดการตั้งค่าที่หัวข้อ "Getting Started" ด้านบน
+2. Core Workflow
+When the AI receives a new input (e.g., a user question):
 
-2. หลักการทำงาน
-เวลา AI ได้รับ input ใหม่ (เช่น คำถามจากผู้ใช้)
-→ ระบบจะดึง context ที่เกี่ยวข้องจาก LTM (MongoDB/Pinecone)
-→ AI นำ context เหล่านั้นมาวิเคราะห์และตอบให้ต่อเนื่องกับสิ่งที่ผู้ใช้เคยพูดหรือถามไว้
+→Retrieve context – The system fetches relevant information from LTM (MongoDB or Pinecone).
 
-3. Workflow ตัวอย่าง
-ฝังข้อมูล (Embedding)
+→Analyze – The AI uses the retrieved context to understand the current query in relation to past interactions.
 
-เมื่ออัพโหลดไฟล์/บทสนทนา ข้อมูลจะถูกสร้าง Embedding แล้วเก็บลง Vector Store (เช่น Pinecone)
+→Respond – It generates an answer that’s consistent with previous information or conversations.
 
-ดึง context
+3. Example Workflow
+Embedding Data
 
-เมื่อผู้ใช้ถามคำถาม ระบบจะใช้ Embedding ของคำถาม ไปค้น context ที่ใกล้เคียงที่สุดจาก Vector Store หรือฐานข้อมูล
+When you upload a file or conversation, the content is embedded and stored in a Vector Store (e.g., Pinecone).
 
-ตอบโดยอ้างอิงความรู้เดิม
+Retrieve Context
 
-AI นำ context ที่ค้นเจอผนวกกับ prompt ในการสร้างคำตอบ
+When a user asks a question, the system embeds the query and searches for the most similar contexts from the Vector Store or database.
+
+Generate Response
+
+The AI combines the retrieved context with a structured prompt to generate a final answer.
 
 4. ไฟล์โค้ดสำคัญที่เกี่ยวข้อง
 embed_MongoDB.py / retrival_MongoDB.py
-สำหรับจัดการ Embedding และ Retrieval จาก MongoDB
+Manage embedding and retrieval from MongoDB
 
 embed_pinecone.py / retrival_Pinecone.py
-สำหรับ Embedding และ Retrieval จาก Pinecone
+Handle embedding and retrieval using Pinecone
 
 Prompt.py
-จัดรูปแบบ prompt/ context ที่จะส่งเข้า LLM
-
+Formats prompts and integrates contextual data for LLM input
 
 ## 🐍 Python Version
 Python: 3.13.x
 
 ## 🚀 Getting Started
-🛠️ 1. สร้าง Environment
+🛠️ 1. Create Environment
 ```python -m venv venv```
 
-📦 2. ติดตั้ง Library ผ่านลงใน environment
+📦 2. Install Dependencies
 ```pip install -r requirements.txt```
 
 
-🔐 3. ตั้งค่า Environment Variables
-สร้างไฟล์ .env ภายในโฟลเดอร์ venv/ แล้วเพิ่มค่า:
+🔐 3. Set Environment Variables
+Create a .env file inside the venv/ directory and add:
 
 <pre>OPENAI_API_KEY=your_openai_api_key
 MONGO_URL=your_localhost_or_remote_url
@@ -68,51 +72,65 @@ TYPHOON_API_KEY=your_key
 TYPHOON_API_URL=https://api.opentyphoon.ai/v1
 </pre>
 
-สามารถรับ api key ของ typhoon ได้จาก https://playground.opentyphoon.ai/api-key
+You can get your Typhoon API key from https://playground.opentyphoon.ai/api-key
 
-## 🧪 วิธีรันโปรเจกต์
-▶️ รัน Backend (FastAPI)
+## 📄 Required File: data.json (in main_backend/)
+Example:
+<pre>
+[
+  {
+    "question": "เมลนิสิตของหนูมีปัญหาไม่สามารถเข้าใช้งานได้ค่ะ",
+    "answer": "กรณีรหัสผ่านหมดอายุหรือถูกระงับบัญชี สามารถเข้าไปแก้ได้ตาม Link นี้ ***"
+  },
+  {
+    "question": "อยากทราบวิธีการสมัครเข้าเรียนต่อมหาวิทยาลัยค่ะ",
+    "answer": "สามารถดูรายละเอียดการสมัครได้ที่ Link นี้ "
+  }]
+</pre>
+
+## 🧪 Running the Project
+▶️ Run Backend (FastAPI)
 ```cd main_backend```
 
 ```uvicorn main:app --host 0.0.0.0 --port 8000 --reload```
 
-## 🖼️ รัน Frontend (Streamlit)
-เปิด Terminal ใหม่:
+## 🖼️ Run Frontend (Streamlit) That is Optional for Test
+Open a new terminal:
 ```cd frontend```
 
 ```streamlit run app.py```
-## 🖼️ รัน Frontend (Prototype)
+
+## 🖼️ 🧩 Run Frontend Prototype (Prototype)
 ```cd frontend```
 
 ```npm run dev```
 
-## 🛠️ แก้ไขปัญหาที่พบบ่อย
-🔄 อัปเดต / ติดตั้งใหม่
-หากเกิดปัญหาเกี่ยวกับ transformers หรือ torchvision:
+## 🛠️ Common Issues & Fixes
+🔄 Update or Reinstall Packages
+If you face issues with transformers or torchvision:
 ```pip uninstall transformers torchvision```
 
 ```pip install transformers torchvision```
 
-## ⚙️ ipywidgets / Jupyter
-ปัญหาเกี่ยวกับ IProgress:
+## ⚙️ Fix IProgress / Jupyter Issues
 ```pip install ipywidgets```
 
 ```jupyter nbextension enable --py widgetsnbextension```
 
-## 🔥 อัปเกรด PyTorch
+## 🔥 Upgrade PyTorch
 ตรวจสอบเวอร์ชันล่าสุดและแก้ไขของ torch:
 ```pip install torch --upgrade```
 
-## 📚 ติดตั้ง Library ที่ขาด
-หากมี error แจ้งว่าขาด library ใด ให้ติดตั้งเพิ่มด้วยคำสั่ง:
+##  📚 Missing Libraries
+If an error indicates a missing library:
 ```pip install <library_name>```
 
-## วิธี Run DOCKER 
+## 🐳 Run with Docker
 ```docker run -d -p 5000:5000 -e OPENAI_API_KEY="your-openai-api-key-here" chatbot_ai_platform```
 
-## อย่าลืม! ติดตั้ง model PythaiNLP ด้วย ของ โมเดลภาษาอังกฤษ 
+## Don't forget ! 🧠 Install NLP Models (for English)
 ```python -m spacy download en_core_web_sm```
 
-## 🙋‍♂️ ติดต่อ
-หากพบปัญหาหรือข้อเสนอแนะ กรุณาเปิด Issue หรือ pull request
+## 🙋‍♂️ Contact
+If you encounter bugs or have suggestions, please open an Issue or submit a Pull Request.
 
