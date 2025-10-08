@@ -118,7 +118,7 @@ If you face issues with transformers or torchvision:
 ```jupyter nbextension enable --py widgetsnbextension```
 
 ## 🔥 Upgrade PyTorch
-ตรวจสอบเวอร์ชันล่าสุดและแก้ไขของ torch:
+Check the latest and fixed version of torch:
 ```pip install torch --upgrade```
 
 ##  📚 Missing Libraries
@@ -133,5 +133,6 @@ If an error indicates a missing library:
 
 ## 🙋‍♂️ Contact
 If you encounter bugs or have suggestions, please open an Issue or submit a Pull Request.
+
 
 
