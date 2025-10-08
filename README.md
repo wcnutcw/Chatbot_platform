@@ -1,5 +1,5 @@
 ## 🧩 Architecture
-![Architecture](images/Architecture.png)
+![Architecture](https://github.com/wcnutcw/Chatbot_platform/blob/main/Img/Architecture.png)
 
 
 ## 🧠 Long-Term Memory (LTM) Usage in This Project
@@ -133,4 +133,5 @@ If an error indicates a missing library:
 
 ## 🙋‍♂️ Contact
 If you encounter bugs or have suggestions, please open an Issue or submit a Pull Request.
+
 
