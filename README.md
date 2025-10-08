@@ -1,5 +1,5 @@
 ## 🧩 Architecture
-![Architecture](Screenshot 2025-10-08 113040.png)
+![Architecture](images/Screenshot 2025-10-08 113040.png)
 
 
 ## 🧠 Long-Term Memory (LTM) Usage in This Project
