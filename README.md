@@ -37,9 +37,7 @@ Generate Response
 
 The AI combines the retrieved context with a structured prompt to generate a final answer.
 
-4. ไฟล์โค้ดสำคัญที่เกี่ยวข้อง
-embed_MongoDB.py / retrival_MongoDB.py
-Manage embedding and retrieval from MongoDB
+4. Important related code files embed_MongoDB.py / retrival_MongoDB.py Manage embedding and retrieval from MongoDB
 
 embed_pinecone.py / retrival_Pinecone.py
 Handle embedding and retrieval using Pinecone
@@ -133,6 +131,7 @@ If an error indicates a missing library:
 
 ## 🙋‍♂️ Contact
 If you encounter bugs or have suggestions, please open an Issue or submit a Pull Request.
+
 
 
 
