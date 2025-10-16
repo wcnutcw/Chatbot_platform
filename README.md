@@ -10,7 +10,7 @@ This allows the system to deliver more intelligent, context-aware, and continuou
 Long-Term Memory refers to storing important data for long-term use — such as chat histories, text content, references, or embeddings — in databases like MongoDB or Pinecone.
 This makes it possible to retrieve and use old information when generating new responses.
 
-## 🛠️ วิธีใช้งาน LTM ในโปรเจกต์นี้
+## 🛠️ How to use LTM in this project
 1. Environment Setup
 You must configure environment variables correctly (MONGO_URL, PINECONE_API_KEY, etc.).
 See the “Getting Started” section below for more details.
@@ -133,6 +133,7 @@ If an error indicates a missing library:
 
 ## 🙋‍♂️ Contact
 If you encounter bugs or have suggestions, please open an Issue or submit a Pull Request.
+
 
 
 
